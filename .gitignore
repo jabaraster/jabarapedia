@@ -1,2 +1,6 @@
 browser/elm-stuff
 browser/repl-temp-*
+browser/.work/
+browser/node_modules/
+.vscode/
+api/node_modules/

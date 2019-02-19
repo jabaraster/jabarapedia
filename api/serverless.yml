@@ -1,0 +1,64 @@
+service:
+  name: jabarapedia
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  region: ap-northeast-1
+  memorySize: 128
+  timeout: 30
+  iamRoleStatements:
+  - Effect: Allow
+    Action:
+    - dynamodb:*
+    Resource:
+    - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/*"
+  - Effect: Allow
+    Action:
+    - s3:*
+    Resource:
+    - "arn:aws:s3:::tegaki-image/*"
+
+functions:
+  getOcrReadDatas:
+    handler: handler.getOcrReadDatas
+    events:
+    - http:
+        method: get
+        path: ocr-data/index
+        cors: true
+  optionsOcrReadDatas:
+    handler: handler.options
+    events:
+    - http:
+        method: options
+        path: ocr-data/index
+        cors: true
+  postOcrReadData:
+    handler: handler.postOcrReadData
+    events:
+    - http:
+        method: post
+        path: ocr-data/index
+        cors: true
+  optionsOcrReadData:
+    handler: handler.options
+    events:
+    - http:
+        method: options
+        path: ocr-data/index
+        cors: true
+  getOcrState:
+    handler: handler.getOcrState
+    events:
+    - http:
+        method: get
+        path: ocr-state/{requestId}
+        cors: true
+  optionsOcrState:
+    handler: handler.options
+    events:
+    - http:
+        method: options
+        path: ocr-state/{requestId}
+        cors: true

@@ -1,0 +1,19 @@
+{
+  "name": "jabarapedia-browser",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "watch-elm": "fswatch -o elm/** | xargs -n1 ./build-elm.sh",
+    "watch-static": "fswatch -o static/** | xargs -n1 ./deploy.sh",
+    "css": "lessc --clean-css less/index.less > ./static/css/index.css"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "axios": "^0.18.0"
+  },
+  "dependencies": {
+    "npm": "^6.8.0"
+  }
+}
