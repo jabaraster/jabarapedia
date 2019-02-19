@@ -3,6 +3,7 @@ import {
 } from 'aws-lambda'
 
 import * as dao from './dao'
+import { Language } from './model'
 
 function res(result: APIGatewayProxyResult): APIGatewayProxyResult {
   if (!result.headers) {
@@ -22,13 +23,13 @@ function resOk(body?: any, headers?: { [name: string]: string }): APIGatewayProx
   })
 }
 
-// function resNoContent(headers?: { [name: string]: string }): APIGatewayProxyResult {
-//   return res({
-//     statusCode: 204,
-//     headers: headers == null ? {} : headers,
-//     body: ""
-//   })
-// }
+function resNoContent(headers?: { [name: string]: string }): APIGatewayProxyResult {
+  return res({
+    statusCode: 204,
+    headers: headers == null ? {} : headers,
+    body: ""
+  })
+}
 
 const options: APIGatewayProxyHandler = async () => {
   return resOk()
@@ -39,7 +40,14 @@ const getLanguages: APIGatewayProxyHandler = async () => {
   return resOk(res)
 }
 
+const postLanguage: APIGatewayProxyHandler = async (evt) => {
+  const body: Language = JSON.parse(evt.body as string)
+  await dao.postLanguage(body)
+  return resNoContent()
+}
+
 export {
   options,
   getLanguages,
+  postLanguage,
 }

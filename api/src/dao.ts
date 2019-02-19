@@ -1,6 +1,5 @@
 import * as AWS from 'aws-sdk'
-import uuid from 'uuid/v4'
-import { Language } from './model'
+import { Failable, Empty, success, fail, Language } from './model'
 
 if ('JABARAPEDIA_AWS_ACCESS_KEY' in process.env) {
   AWS.config.update({
@@ -19,15 +18,26 @@ const db: AWS.DynamoDB.DocumentClient = new AWS.DynamoDB.DocumentClient()
 
 const TABLE_NAME: string = "jabarapedia_dev"
 
-async function postLanguage(data: Language): Promise<void> {
+async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
+  // 存在チェック
+  const res = await db.get({
+    TableName: TABLE_NAME,
+    Key: {
+      kind: 'Language',
+      id: data.path,
+    }
+  }).promise()
+  if (res.Item != null) return fail('key duplicate.')
+
   const d = JSON.parse(JSON.stringify(data))
   d.kind = 'Language'
-  d.id = uuid()
-  console.log(d)
+  d.id = data.path
+  delete d.path
   await db.put({
     TableName: TABLE_NAME,
     Item: d,
   }).promise()
+  return success({})
 }
 
 async function getLanguages(): Promise<Language[]> {
@@ -40,16 +50,8 @@ async function getLanguages(): Promise<Language[]> {
   }).promise()
   if (res.Items == null) return [];
   return res.Items.map(item => {
-    console.log(item)
-    return {
-      meta: {
-        lightWeight: true,
-        staticTyping: true,
-      },
-      name: 'Haskell',
-      path: 'haskell',
-      impression: 'ツンデレ',
-    }
+      item.path = item.id
+      return item as Language
   })
 }
 
