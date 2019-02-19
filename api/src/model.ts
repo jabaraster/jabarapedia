@@ -1,10 +1,16 @@
-interface OcrReadData {
-  requestId: string;
-  url: string;
-  imageWidth: number;
-  imageHeight: number;
+interface LanguageMeta {
+  lightWeight: boolean;
+  staticTyping: boolean;
+}
+
+interface Language{
+  meta: LanguageMeta
+  name: string;
+  path: string;
+  impression: string;
 }
 
 export {
-  OcrReadData,
+  LanguageMeta,
+  Language,
 }

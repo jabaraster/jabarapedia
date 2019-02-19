@@ -4,3 +4,4 @@ browser/.work/
 browser/node_modules/
 .vscode/
 api/node_modules/
+api/.webpack/

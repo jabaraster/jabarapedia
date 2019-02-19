@@ -1,9 +1,7 @@
 import {
   APIGatewayProxyHandler, APIGatewayProxyResult
 } from 'aws-lambda'
-import axios from 'axios'
 
-import { OcrReadData } from './model'
 import * as dao from './dao'
 
 function res(result: APIGatewayProxyResult): APIGatewayProxyResult {
@@ -36,19 +34,12 @@ const options: APIGatewayProxyHandler = async () => {
   return resOk()
 }
 
-const getOcrReadDatas: APIGatewayProxyHandler = async () => {
-  const ret: OcrReadData[] = await dao.getOcrReadDatas()
-  return resOk(ret)
-}
-
-const postOcrReadData: APIGatewayProxyHandler = async (event) => {
-  const body: OcrReadData = JSON.parse(event.body as string)
-  const res = await dao.saveOcrReadData(body)
+const getLanguages: APIGatewayProxyHandler = async () => {
+  const res = await dao.getLanguages()
   return resOk(res)
 }
 
 export {
   options,
-  getOcrReadDatas,
-  postOcrReadData,
+  getLanguages,
 }

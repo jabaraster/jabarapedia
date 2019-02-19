@@ -20,45 +20,17 @@ provider:
     - "arn:aws:s3:::tegaki-image/*"
 
 functions:
-  getOcrReadDatas:
-    handler: handler.getOcrReadDatas
+  getLanguages:
+    handler: handler.getLanguages
     events:
     - http:
         method: get
-        path: ocr-data/index
-        cors: true
-  optionsOcrReadDatas:
+        path: language/index
+        cors: false
+  optionsLanguage:
     handler: handler.options
     events:
     - http:
         method: options
-        path: ocr-data/index
-        cors: true
-  postOcrReadData:
-    handler: handler.postOcrReadData
-    events:
-    - http:
-        method: post
-        path: ocr-data/index
-        cors: true
-  optionsOcrReadData:
-    handler: handler.options
-    events:
-    - http:
-        method: options
-        path: ocr-data/index
-        cors: true
-  getOcrState:
-    handler: handler.getOcrState
-    events:
-    - http:
-        method: get
-        path: ocr-state/{requestId}
-        cors: true
-  optionsOcrState:
-    handler: handler.options
-    events:
-    - http:
-        method: options
-        path: ocr-state/{requestId}
-        cors: true
+        path: language/index
+        cors: false
