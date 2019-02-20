@@ -1,10 +1,14 @@
 module Index exposing (Model, Msg(..), Resource(..), init, links, main, onUrlChange, onUrlRequest, parseUrl, subscriptions, update, view)
 
+import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation exposing (Key, pushUrl)
+import List exposing (map)
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Http
 import Json.Decode as JD
+import Model exposing (Language, LanguageId)
 import Url exposing (Url)
 import Url.Builder as UB
 import Url.Parser as UP exposing (..)
@@ -48,22 +52,34 @@ onUrlChange url =
 -- MODEL
 
 
-init : flags -> Url -> Key -> ( Model, Cmd Msg )
-init _ url key =
-    Debug.log "init" ( { resource = parseUrl url, key = key }, Cmd.none )
-
-
 type alias Model =
     { resource : Resource
     , key : Key
+    , languages : List Language
+    , language : Maybe Language
     }
-
 
 type Resource
     = Home
     | LanguageIndex
-    | Language String
+    | Language LanguageId
     | NotFound
+
+
+init : flags -> Url -> Key -> ( Model, Cmd Msg )
+init _ url key =
+    case parseUrl url of
+        NotFound ->
+            ( { resource = NotFound, key = key, languages = [], language = Nothing }, Browser.Navigation.load "/" )
+
+        Home ->
+            ( { resource = Home, key = key, languages = [], language = Nothing }, Cmd.none )
+
+        LanguageIndex ->
+            ( { resource = LanguageIndex, key = key, languages = [], language = Nothing }, Api.getLanguages IndexLoaded )
+
+        Language languageId ->
+            ( { resource = parseUrl url, key = key, languages = [], language = Nothing }, Api.getLanguage languageId LanguageLoaded )
 
 
 
@@ -73,21 +89,39 @@ type Resource
 type Msg
     = UrlChange Url
     | LinkClicked UrlRequest
+    | IndexLoaded (Result Http.Error (List Language))
+    | LanguageLoaded (Result Http.Error Language)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         UrlChange url ->
-            Debug.log "UrlChange" ( { model | resource = parseUrl url }, Cmd.none )
+            ( { model | resource = parseUrl url }, Cmd.none )
 
         LinkClicked urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
-                    Debug.log "LinkClicked[Internal]" ( { model | resource = parseUrl url }, pushUrl model.key <| Url.toString url )
+                    ( { model | resource = parseUrl url }, pushUrl model.key <| Url.toString url )
 
                 Browser.External href ->
-                    Debug.log "LinkClicked[External]" ( model, Browser.Navigation.load href )
+                    ( model, Browser.Navigation.load href )
+
+        IndexLoaded res ->
+            case res of
+                Ok languages ->
+                    ( { model | languages = languages }, Cmd.none )
+
+                Err err ->
+                    ( model, Cmd.none )
+
+        LanguageLoaded res ->
+            case res of
+                Ok language ->
+                    ( { model | language = Just language }, Cmd.none )
+
+                Err err ->
+                    ( model, Cmd.none )
 
 
 parseUrl : Url -> Resource
@@ -139,7 +173,9 @@ view model =
             { title = "LanguageIndex"
             , body =
                 [ h1 [] [ text "Hello, Jabarapedia!" ]
-                , links
+                , ol [] <| List.map (\lang -> 
+                      li [] [a [ href <| "/language/" ++ lang.path ] [ text lang.name ] ]
+                   ) model.languages
                 ]
             }
 
