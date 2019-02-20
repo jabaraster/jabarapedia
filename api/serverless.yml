@@ -27,6 +27,13 @@ functions:
         method: get
         path: language/index
         cors: false
+  postLanguage:
+    handler: handler.postLanguage
+    events:
+    - http:
+        method: post
+        path: language/index
+        cors: false
   optionsLanguage:
     handler: handler.options
     events:

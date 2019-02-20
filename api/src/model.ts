@@ -30,9 +30,11 @@ function fail<S, F>(fail: F): Failable<S, F> {
 }
 
 type Empty = {}
+const empty: Empty = {}
 
 export {
   Empty,
+  empty,
   Failable,
   success,
   fail,

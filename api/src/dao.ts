@@ -1,5 +1,5 @@
 import * as AWS from 'aws-sdk'
-import { Failable, Empty, success, fail, Language } from './model'
+import { Failable, Empty, empty, success, fail, Language } from './model'
 
 if ('JABARAPEDIA_AWS_ACCESS_KEY' in process.env) {
   AWS.config.update({
@@ -37,7 +37,7 @@ async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
     TableName: TABLE_NAME,
     Item: d,
   }).promise()
-  return success({})
+  return success(empty)
 }
 
 async function getLanguages(): Promise<Language[]> {
@@ -51,6 +51,8 @@ async function getLanguages(): Promise<Language[]> {
   if (res.Items == null) return [];
   return res.Items.map(item => {
       item.path = item.id
+      delete item.kind
+      delete item.id
       return item as Language
   })
 }
