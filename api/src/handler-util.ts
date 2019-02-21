@@ -9,6 +9,7 @@ export const HttpReturnCode = {
 
   BAD_REQUEST: 400,
   FORBIDDEN: 403,
+  NOT_FOUND: 404,
 }
 
 export type Headers = { string: string }

@@ -14,11 +14,9 @@ if ('JABARAPEDIA_AWS_ACCESS_KEY' in process.env) {
 }
 const db: AWS.DynamoDB.DocumentClient = new AWS.DynamoDB.DocumentClient()
 
-// const s3 = new AWS.S3()
-
 const TABLE_NAME: string = "jabarapedia_dev"
 
-async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
+export async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
   // 存在チェック
   const res = await db.get({
     TableName: TABLE_NAME,
@@ -40,7 +38,7 @@ async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
   return success(empty)
 }
 
-async function getLanguages(): Promise<Language[]> {
+export async function getLanguages(): Promise<Language[]> {
   const res = await db.query({
     TableName: TABLE_NAME,
     KeyConditionExpression: 'kind = :kind',
@@ -49,15 +47,25 @@ async function getLanguages(): Promise<Language[]> {
     }
   }).promise()
   if (res.Items == null) return [];
-  return res.Items.map(item => {
-      item.path = item.id
-      delete item.kind
-      delete item.id
-      return item as Language
-  })
+  return res.Items.map(itemToLanguage)
 }
 
-export {
-  getLanguages,
-  postLanguage,
+function itemToLanguage(item: AWS.DynamoDB.DocumentClient.AttributeMap): Language {
+  item.path = item.id
+  delete item.kind
+  delete item.id
+  return item as Language
+}
+
+export async function getLanguage(languageId: string): Promise<Failable<Language, string>> {
+  // 存在チェック
+  const res = await db.get({
+    TableName: TABLE_NAME,
+    Key: {
+      kind: 'Language',
+      id: languageId,
+    }
+  }).promise()
+  if (res.Item == null) return fail('language not found.')
+  return success(itemToLanguage(res.Item))
 }

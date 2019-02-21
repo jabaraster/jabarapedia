@@ -32,6 +32,10 @@ languageDecoder : JD.Decoder Language
 languageDecoder =
     JD.map4 Language
         (JD.field "name" JD.string)
-        (JD.field "pagh" JD.string)
-        (JD.field "impression" JD.string)
+        (JD.field "path" JD.string)
+        (JD.maybe (JD.field "impression" JD.string) |> JD.andThen (\m ->
+              case m of
+                Nothing -> JD.succeed ""
+                Just s  -> JD.succeed s
+              ))
         (JD.field "meta" languageMetaDecoder)

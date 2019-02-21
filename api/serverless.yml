@@ -34,10 +34,24 @@ functions:
         method: post
         path: language/index
         cors: false
-  optionsLanguage:
+  optionsLanguages:
     handler: handler.options
     events:
     - http:
         method: options
         path: language/index
+        cors: false
+  getLanguage:
+    handler: handler.getLanguage
+    events:
+    - http:
+        method: get
+        path: language/{languageId}
+        cors: false
+  optionsLanguage:
+    handler: handler.getLanguage
+    events:
+    - http:
+        method: options
+        path: language/{languageId}
         cors: false

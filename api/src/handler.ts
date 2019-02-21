@@ -22,3 +22,11 @@ export const postLanguage: APIGatewayProxyHandler = async (evt) => {
   if (res.fail != null) return r.general(HttpReturnCode.BAD_REQUEST, {errorMessage: res.fail})
   return r.created(null)
 }
+
+export const getLanguage: APIGatewayProxyHandler = async (evt) => {
+  const li = evt.pathParameters!!.languageId
+  if (li == null) return r.general(HttpReturnCode.NOT_FOUND)
+  const res = await dao.getLanguage(li)
+  if (res.fail != null) return r.general(HttpReturnCode.NOT_FOUND, { errorMessage: `language ${li} not found.` })
+  return r.ok(res.success)
+}

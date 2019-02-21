@@ -1,51 +1,33 @@
-module Index exposing (Model, Msg(..), Resource(..), init, links, main, onUrlChange, onUrlRequest, parseUrl, subscriptions, update, view)
+module Index exposing (Model, Msg(..), Resource(..), init, main, parseUrl, subscriptions, update, view)
 
 import Api
 import Browser exposing (Document, UrlRequest)
-import Browser.Navigation exposing (Key, pushUrl)
-import List exposing (map)
+import Browser.Navigation exposing (Key)
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Http
-import Json.Decode as JD
+import Json.Decode
+import List exposing (map)
 import Model exposing (Language, LanguageId)
 import Url exposing (Url)
-import Url.Builder as UB
-import Url.Parser as UP exposing (..)
+import Url.Builder
+import Url.Parser exposing (..)
 
 
 
 -- MAIN
 
 
-main : Platform.Program JD.Value Model Msg
+main : Platform.Program Json.Decode.Value Model Msg
 main =
     Browser.application
         { init = init
         , view = view
         , update = update
         , subscriptions = subscriptions
-        , onUrlRequest = onUrlRequest
-        , onUrlChange = onUrlChange
+        , onUrlRequest = LinkClicked
+        , onUrlChange = UrlChange
         }
-
-
-
--- ON_URL_REQUEST
-
-
-onUrlRequest : UrlRequest -> Msg
-onUrlRequest urlRequest =
-    LinkClicked urlRequest
-
-
-
--- ON_URL_CHANGE
-
-
-onUrlChange : Url -> Msg
-onUrlChange url =
-    UrlChange url
 
 
 
@@ -55,9 +37,10 @@ onUrlChange url =
 type alias Model =
     { resource : Resource
     , key : Key
-    , languages : List Language
-    , language : Maybe Language
+    , languages : Maybe (Result Http.Error (List Language))
+    , language : Maybe (Result Http.Error Language)
     }
+
 
 type Resource
     = Home
@@ -68,18 +51,53 @@ type Resource
 
 init : flags -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    case parseUrl url of
+    let
+        res =
+            parseUrl url
+    in
+    route url
+        { resource = Home
+        , key = key
+        , languages = Nothing
+        , language = Nothing
+        }
+        False
+
+
+route : Url -> Model -> Bool -> ( Model, Cmd Msg )
+route url model urlPush =
+    let
+        res =
+            parseUrl url
+
+        newModel =
+            { model | resource = res }
+    in
+    case res of
         NotFound ->
-            ( { resource = NotFound, key = key, languages = [], language = Nothing }, Browser.Navigation.load "/" )
+            ( newModel, Cmd.none )
 
         Home ->
-            ( { resource = Home, key = key, languages = [], language = Nothing }, Cmd.none )
+            ( newModel, pushUrl model.key url )
 
         LanguageIndex ->
-            ( { resource = LanguageIndex, key = key, languages = [], language = Nothing }, Api.getLanguages IndexLoaded )
+            if urlPush then
+                ( newModel, Cmd.batch [ pushUrl model.key url, Api.getLanguages IndexLoaded ] )
 
-        Language languageId ->
-            ( { resource = parseUrl url, key = key, languages = [], language = Nothing }, Api.getLanguage languageId LanguageLoaded )
+            else
+                ( newModel, Api.getLanguages IndexLoaded )
+
+        Language path ->
+            if urlPush then
+                ( newModel, Cmd.batch [ pushUrl model.key url, Api.getLanguage path LanguageLoaded ] )
+
+            else
+                ( newModel, Api.getLanguage path LanguageLoaded )
+
+
+pushUrl : Key -> Url -> Cmd msg
+pushUrl key url =
+    Browser.Navigation.pushUrl key <| Url.toString url
 
 
 
@@ -97,41 +115,31 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         UrlChange url ->
-            ( { model | resource = parseUrl url }, Cmd.none )
+            route url model False
 
         LinkClicked urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( { model | resource = parseUrl url }, pushUrl model.key <| Url.toString url )
+                    route url model True
 
                 Browser.External href ->
                     ( model, Browser.Navigation.load href )
 
         IndexLoaded res ->
-            case res of
-                Ok languages ->
-                    ( { model | languages = languages }, Cmd.none )
-
-                Err err ->
-                    ( model, Cmd.none )
+            ( { model | languages = Just res }, Cmd.none )
 
         LanguageLoaded res ->
-            case res of
-                Ok language ->
-                    ( { model | language = Just language }, Cmd.none )
-
-                Err err ->
-                    ( model, Cmd.none )
+            ( { model | language = Just res }, Cmd.none )
 
 
 parseUrl : Url -> Resource
 parseUrl url =
     Maybe.withDefault NotFound <|
-        UP.parse
-            (UP.oneOf
-                [ UP.map Home <| UP.top
-                , UP.map LanguageIndex <| UP.s "language"
-                , UP.map Language (UP.s "language" </> UP.string)
+        Url.Parser.parse
+            (Url.Parser.oneOf
+                [ Url.Parser.map Home <| Url.Parser.top
+                , Url.Parser.map LanguageIndex <| Url.Parser.s "language"
+                , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
                 ]
             )
             url
@@ -154,44 +162,140 @@ view : Model -> Document Msg
 view model =
     case model.resource of
         NotFound ->
-            { title = "NOT FOUND"
+            { title = title "NOT FOUND"
             , body =
-                [ h1 [] [ text "Hello, Jabarapedia!" ]
-                , links
+                [ h1 [] [ text "Sorry, request page is not found." ]
                 ]
             }
 
         Home ->
-            { title = "Home"
+            { title = title "Home"
             , body =
-                [ h1 [] [ text "Hello, Jabarapedia!" ]
-                , links
+                [ h1 [] [ text "Jabarapedia, Home" ]
+                , ul []
+                    [ list <| a [ href "/language/" ] [ text "Language index" ]
+                    ]
                 ]
             }
 
         LanguageIndex ->
-            { title = "LanguageIndex"
-            , body =
-                [ h1 [] [ text "Hello, Jabarapedia!" ]
-                , ol [] <| List.map (\lang -> 
-                      li [] [a [ href <| "/language/" ++ lang.path ] [ text lang.name ] ]
-                   ) model.languages
-                ]
-            }
+            case model.languages of
+                Nothing ->
+                    { title = title "Language index"
+                    , body =
+                        [ section []
+                            [ h1 [] [ text "Language index" ]
+                            , p [] [ text "now loading..." ]
+                            ]
+                        ]
+                    }
 
-        Language name ->
-            { title = "Detail of " ++ name
-            , body =
-                [ h1 [] [ text "Hello, Jabarapedia!" ]
-                , h2 [] [ text <| "Detail of " ++ name ]
-                , links
-                ]
-            }
+                Just res ->
+                    { title = title "Language index"
+                    , body =
+                        [ section [] <|
+                            h1 [] [ text "Language index" ]
+                                :: viewLanguageIndexRoute res
+                        ]
+                    }
+
+        Language path ->
+            case model.language of
+                Nothing ->
+                    { title = title <| "Detail of " ++ path
+                    , body =
+                        [ section []
+                            [ h1 [] [ text <| "Detail of " ++ path ]
+                            , p [] [ text "now loading..." ]
+                            ]
+                        ]
+                    }
+
+                Just res ->
+                    case res of
+                        Ok lang ->
+                            { title = title <| "Detail of " ++ lang.name
+                            , body =
+                                [ section []
+                                    [ h1 [] [ text <| "Detail of " ++ lang.name ]
+                                    , viewLanguageDetail lang
+                                    ]
+                                ]
+                            }
+
+                        Err err ->
+                            { title = title <| "Detail of " ++ path
+                            , body =
+                                [ section [] <|
+                                    h1 [] [ text <| "Detail of " ++ path ]
+                                        :: viewError err
+                                ]
+                            }
 
 
-links : Html msg
-links =
-    ul []
-        [ li [] [ a [ href "/language/" ] [ text "/language/" ] ]
-        , li [] [ a [ href "/language/haskell" ] [ text "/language/haskell" ] ]
+viewError : Http.Error -> List (Html msg)
+viewError err =
+    [ h3 [] [ text "Oops... error occurred..." ]
+    , p [] [ text <| errorText err ]
+    ]
+
+
+viewLanguageIndexRoute : Result Http.Error (List Language) -> List (Html msg)
+viewLanguageIndexRoute res =
+    case res of
+        Ok languages ->
+            viewLanguageIndex languages
+
+        Err err ->
+            viewError err
+
+
+viewLanguageIndex : List Language -> List (Html msg)
+viewLanguageIndex languages =
+    [ ol [] <| List.map (list << languageLink) languages ]
+
+
+viewLanguageDetail : Language -> Html msg
+viewLanguageDetail lang =
+    section []
+        [ h2 [] [ text "Impression" ]
+        , p [] [ text lang.impression ]
         ]
+
+
+title : String -> String
+title t =
+    t ++ " | Jabarapedia"
+
+
+languageLink : Language -> Html msg
+languageLink lang =
+    a [ href <| "/language/" ++ lang.path ] [ text lang.name ]
+
+
+list : Html msg -> Html msg
+list inner =
+    li [] [ inner ]
+
+
+
+-- UTILITY
+
+
+errorText : Http.Error -> String
+errorText err =
+    case err of
+        Http.BadUrl url ->
+            "Fail -> Bad URL ->" ++ url
+
+        Http.Timeout ->
+            "Fail -> Timeout."
+
+        Http.NetworkError ->
+            "Fail -> Network error."
+
+        Http.BadStatus s ->
+            "Fail -> Bad status -> " ++ String.fromInt s
+
+        Http.BadBody b ->
+            "Fail -> BadBody -> " ++ b
