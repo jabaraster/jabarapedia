@@ -6,7 +6,7 @@
   "scripts": {
     "watch-elm": "fswatch -o elm/** | xargs -n1 ./build-elm.sh",
     "watch-static": "fswatch -o static/** | xargs -n1 ./deploy.sh",
-    "css": "lessc --clean-css less/index.less > ./static/css/index.css"
+    "css": "lessc --clean-css less/app.less > ./static/css/app.css"
   },
   "author": "",
   "license": "ISC",

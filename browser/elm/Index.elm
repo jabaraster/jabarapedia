@@ -12,6 +12,7 @@ import Model exposing (Language, LanguageId)
 import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing (..)
+import View 
 
 
 
@@ -44,7 +45,6 @@ type alias Model =
 
 type Resource
     = Home
-    | LanguageIndex
     | Language LanguageId
     | NotFound
 
@@ -72,27 +72,23 @@ route url model urlPush =
 
         newModel =
             { model | resource = res }
+
+        ( m, cmd ) =
+            case res of
+                NotFound ->
+                    ( newModel, Cmd.none )
+
+                Home ->
+                    ( newModel, Api.getLanguages IndexLoaded )
+
+                Language path ->
+                    ( { newModel | language = Nothing }, Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ] )
     in
-    case res of
-        NotFound ->
-            ( newModel, Cmd.none )
+    if urlPush then
+        ( m, Cmd.batch [ pushUrl model.key url, cmd ] )
 
-        Home ->
-            ( newModel, pushUrl model.key url )
-
-        LanguageIndex ->
-            if urlPush then
-                ( newModel, Cmd.batch [ pushUrl model.key url, Api.getLanguages IndexLoaded ] )
-
-            else
-                ( newModel, Api.getLanguages IndexLoaded )
-
-        Language path ->
-            if urlPush then
-                ( newModel, Cmd.batch [ pushUrl model.key url, Api.getLanguage path LanguageLoaded ] )
-
-            else
-                ( newModel, Api.getLanguage path LanguageLoaded )
+    else
+        ( m, cmd )
 
 
 pushUrl : Key -> Url -> Cmd msg
@@ -138,7 +134,6 @@ parseUrl url =
         Url.Parser.parse
             (Url.Parser.oneOf
                 [ Url.Parser.map Home <| Url.Parser.top
-                , Url.Parser.map LanguageIndex <| Url.Parser.s "language"
                 , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
                 ]
             )
@@ -162,75 +157,89 @@ view : Model -> Document Msg
 view model =
     case model.resource of
         NotFound ->
-            { title = title "NOT FOUND"
-            , body =
-                [ h1 [] [ text "Sorry, request page is not found." ]
-                ]
-            }
+            viewCore
+                { title = "not found"
+                , model = model
+                , inner = [ span [] [ text "Sorry, request page not found." ] ]
+                }
 
         Home ->
-            { title = title "Home"
-            , body =
-                [ h1 [] [ text "Jabarapedia, Home" ]
-                , ul []
-                    [ list <| a [ href "/language/" ] [ text "Language index" ]
-                    ]
-                ]
-            }
-
-        LanguageIndex ->
-            case model.languages of
-                Nothing ->
-                    { title = title "Language index"
-                    , body =
-                        [ section []
-                            [ h1 [] [ text "Language index" ]
-                            , p [] [ text "now loading..." ]
-                            ]
-                        ]
-                    }
-
-                Just res ->
-                    { title = title "Language index"
-                    , body =
-                        [ section [] <|
-                            h1 [] [ text "Language index" ]
-                                :: viewLanguageIndexRoute res
-                        ]
-                    }
+            viewCore
+                { title = "Home"
+                , model = model
+                , inner = [ p [] [ text "Jabarapediaはプログラミングが大好きな私 じゃばら が、使ったことのあるプログラミング言語について語るサイトです." ] ]
+                }
 
         Language path ->
             case model.language of
                 Nothing ->
-                    { title = title <| "Detail of " ++ path
-                    , body =
-                        [ section []
-                            [ h1 [] [ text <| "Detail of " ++ path ]
-                            , p [] [ text "now loading..." ]
-                            ]
-                        ]
-                    }
+                    viewCore
+                        { title = "Detail of " ++ path
+                        , model = model
+                        , inner = [ p [] [ text "now loading..." ] ]
+                        }
 
-                Just res ->
-                    case res of
-                        Ok lang ->
-                            { title = title <| "Detail of " ++ lang.name
-                            , body =
-                                [ section []
-                                    [ h1 [] [ text <| "Detail of " ++ lang.name ]
-                                    , viewLanguageDetail lang
-                                    ]
-                                ]
-                            }
+                Just (Ok lang) ->
+                    viewCore
+                        { title = "Detail of " ++ lang.name
+                        , model = model
+                        , inner = viewLanguageDetail lang
+                        }
 
-                        Err err ->
-                            { title = title <| "Detail of " ++ path
-                            , body =
-                                [ section [] <|
-                                    h1 [] [ text <| "Detail of " ++ path ]
-                                        :: viewError err
-                                ]
-                            }
+                Just (Err err) ->
+                    viewCore
+                        { title = "Detail of " ++ path
+                        , model = model
+                        , inner = viewError err
+                        }
+
+
+type alias ViewParam msg =
+    { title : String
+    , model : Model
+    , inner : List (Html msg)
+    }
+
+
+viewCore : ViewParam msg -> Document msg
+viewCore param =
+    { title = param.title ++ " | Jabarapedia"
+    , body =
+        [ hd
+        , index param.model.languages
+        , mainContent param.inner
+        ]
+    }
+
+
+index : Maybe (Result Http.Error (List Language)) -> Html msg
+index m =
+    nav [ class "index" ] <|
+        h1 [] [ text "Language Index" ]
+            :: (case m of
+                    Nothing ->
+                        [ text "now loading..." ]
+
+                    Just (Ok languages) ->
+                        viewLanguageIndex languages
+
+                    Just (Err err) ->
+                        viewError err
+               )
+
+
+mainContent : List (Html msg) -> Html msg
+mainContent =
+    section [ class "main-content" ]
+
+
+hd : Html msg
+hd =
+    header []
+        [ a [ href "/" ] [ img [ src "/img/logo.jpg", class "logo" ] [] ]
+        , span [] [ text "Jabarapedia" ]
+        , button [] [ View.fas "edit" ]
+        ]
 
 
 viewError : Http.Error -> List (Html msg)
@@ -252,20 +261,15 @@ viewLanguageIndexRoute res =
 
 viewLanguageIndex : List Language -> List (Html msg)
 viewLanguageIndex languages =
-    [ ol [] <| List.map (list << languageLink) languages ]
+    [ ul [] <| List.map (list << languageLink) languages ]
 
 
-viewLanguageDetail : Language -> Html msg
+viewLanguageDetail : Language -> List (Html msg)
 viewLanguageDetail lang =
-    section []
-        [ h2 [] [ text "Impression" ]
-        , p [] [ text lang.impression ]
-        ]
-
-
-title : String -> String
-title t =
-    t ++ " | Jabarapedia"
+    [ h1 [] [ text lang.name ]
+    , h2 [] [ text "Impression" ]
+    , p [] [ text lang.impression ]
+    ]
 
 
 languageLink : Language -> Html msg
