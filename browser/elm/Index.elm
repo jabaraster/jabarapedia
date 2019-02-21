@@ -12,7 +12,7 @@ import Model exposing (Language, LanguageId)
 import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing (..)
-import View 
+import View
 
 
 
@@ -167,7 +167,7 @@ view model =
             viewCore
                 { title = "Home"
                 , model = model
-                , inner = [ p [] [ text "Jabarapediaはプログラミングが大好きな私 じゃばら が、使ったことのあるプログラミング言語について語るサイトです." ] ]
+                , inner = [ p [] [ text "Jabarapediaはプログラミングが大好きな私 じゃばら が、プログラミング言語について語るサイトです." ] ]
                 }
 
         Language path ->
@@ -215,7 +215,7 @@ viewCore param =
 index : Maybe (Result Http.Error (List Language)) -> Html msg
 index m =
     nav [ class "index" ] <|
-        h1 [] [ text "Language Index" ]
+        h1 [] [ text "Index" ]
             :: (case m of
                     Nothing ->
                         [ text "now loading..." ]
@@ -267,9 +267,31 @@ viewLanguageIndex languages =
 viewLanguageDetail : Language -> List (Html msg)
 viewLanguageDetail lang =
     [ h1 [] [ text lang.name ]
+    , h2 [] [ text "Meta" ]
+    , div [] [ check "Light weight" lang.meta.lightWeight, check "Static typing" lang.meta.staticTyping ]
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]
     ]
+
+
+check : String -> Bool -> Html msg
+check label b =
+    let
+        fas =
+            if b then
+                "check-circle"
+
+            else
+                "times-circle"
+
+        bs =
+            if b then
+                "true"
+
+            else
+                "false"
+    in
+    span [ class "meta-check" ] [ View.fas_ bs fas, span [] [ text label ] ]
 
 
 languageLink : Language -> Html msg
