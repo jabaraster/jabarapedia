@@ -238,7 +238,6 @@ hd =
     header []
         [ a [ href "/" ] [ img [ src "/img/logo.jpg", class "logo" ] [] ]
         , span [] [ text "Jabarapedia" ]
-        , button [] [ View.fas "edit" ]
         ]
 
 
@@ -266,30 +265,31 @@ viewLanguageIndex languages =
 
 viewLanguageDetail : Language -> List (Html msg)
 viewLanguageDetail lang =
-    [ h1 [] [ text lang.name ]
+    [ h1 [] [ text lang.name, button [] [ View.fas "edit" ] ]
     , h2 [] [ text "Meta" ]
-    , div [] [ check "Light weight" lang.meta.lightWeight, check "Static typing" lang.meta.staticTyping ]
+    , div [] [ metaCheck "Light weight" (Just lang.meta.lightWeight)
+             , metaCheck "Static typing" (Just lang.meta.staticTyping)
+             , metaCheck "Functional" lang.meta.functional
+             , metaCheck "Object oriented" lang.meta.objectOriented
+             ]
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]
     ]
 
 
-check : String -> Bool -> Html msg
-check label b =
+metaCheck : String -> Maybe Bool -> Html msg
+metaCheck label b =
     let
-        fas =
-            if b then
-                "check-circle"
+        ( bs, fas ) =
+            case b of
+                Nothing ->
+                    ( "nothing", "question-circle" )
 
-            else
-                "times-circle"
+                Just True ->
+                    ( "true", "check-circle" )
 
-        bs =
-            if b then
-                "true"
-
-            else
-                "false"
+                Just False ->
+                    ( "false", "times-circle" )
     in
     span [ class "meta-check" ] [ View.fas_ bs fas, span [] [ text label ] ]
 

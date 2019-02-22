@@ -10,6 +10,8 @@ type alias LanguageId
 type alias LanguageMeta =
     { lightWeight : Bool
     , staticTyping : Bool
+    , functional: Maybe Bool
+    , objectOriented: Maybe Bool
     }
 
 
@@ -23,9 +25,11 @@ type alias Language =
 
 languageMetaDecoder : JD.Decoder LanguageMeta
 languageMetaDecoder =
-    JD.map2 LanguageMeta
+    JD.map4 LanguageMeta
         (JD.field "lightWeight" JD.bool)
         (JD.field "staticTyping" JD.bool)
+        (JD.maybe <| JD.field "functional" JD.bool)
+        (JD.maybe <| JD.field "objectOriented" JD.bool)
 
 
 languageDecoder : JD.Decoder Language
