@@ -4,6 +4,7 @@ import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation exposing (Key)
 import Html exposing (..)
+import Html.Events exposing (..)
 import Html.Attributes exposing (..)
 import Http
 import Json.Decode
@@ -13,6 +14,7 @@ import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing (..)
 import View
+import Util
 
 
 
@@ -32,6 +34,35 @@ main =
 
 
 
+-- ROUTING
+
+
+type Resource
+    = Home
+    | Language LanguageId
+    | NewLanguageForm
+    | NotFound
+
+
+parseUrl : Url -> Resource
+parseUrl url =
+    Maybe.withDefault NotFound <|
+        Url.Parser.parse
+            (Url.Parser.oneOf
+                [ Url.Parser.map Home <| Url.Parser.top
+                , Url.Parser.map NewLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.s "new")
+                , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
+                ]
+            )
+            url
+
+
+pushUrl : Key -> Url -> Cmd msg
+pushUrl key url =
+    Browser.Navigation.pushUrl key <| Url.toString url
+
+
+
 -- MODEL
 
 
@@ -40,13 +71,9 @@ type alias Model =
     , key : Key
     , languages : Maybe (Result Http.Error (List Language))
     , language : Maybe (Result Http.Error Language)
+
+    , editLanguage : Language
     }
-
-
-type Resource
-    = Home
-    | Language LanguageId
-    | NotFound
 
 
 init : flags -> Url -> Key -> ( Model, Cmd Msg )
@@ -60,6 +87,17 @@ init _ url key =
         , key = key
         , languages = Nothing
         , language = Nothing
+        , editLanguage = 
+          { name = ""
+          , path = ""
+          , impression = ""
+          , meta =
+            { lightWeight = False
+            , staticTyping = True
+            , functional = Just True
+            , objectOriented = Just False
+            }
+          }
         }
         False
 
@@ -81,6 +119,9 @@ route url model urlPush =
                 Home ->
                     ( newModel, Api.getLanguages IndexLoaded )
 
+                NewLanguageForm ->
+                    ( newModel, Api.getLanguages IndexLoaded )
+
                 Language path ->
                     ( { newModel | language = Nothing }, Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ] )
     in
@@ -89,11 +130,6 @@ route url model urlPush =
 
     else
         ( m, cmd )
-
-
-pushUrl : Key -> Url -> Cmd msg
-pushUrl key url =
-    Browser.Navigation.pushUrl key <| Url.toString url
 
 
 
@@ -105,6 +141,10 @@ type Msg
     | LinkClicked UrlRequest
     | IndexLoaded (Result Http.Error (List Language))
     | LanguageLoaded (Result Http.Error Language)
+    | LanguageNameChange String
+    | LanguagePathChange String
+    | LanguageImpressionChange String
+    | SaveLanguage
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -128,18 +168,17 @@ update msg model =
             ( { model | language = Just res }, Cmd.none )
 
 
-parseUrl : Url -> Resource
-parseUrl url =
-    Maybe.withDefault NotFound <|
-        Url.Parser.parse
-            (Url.Parser.oneOf
-                [ Url.Parser.map Home <| Url.Parser.top
-                , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
-                ]
-            )
-            url
-
-
+        LanguageNameChange s ->
+            let lang = model.editLanguage
+            in  ( { model | editLanguage = { lang | name = s } }, Cmd.none )
+        LanguagePathChange s ->
+            let lang = model.editLanguage
+            in  ( { model | editLanguage = { lang | path = s } }, Cmd.none )
+        LanguageImpressionChange s ->
+            let lang = model.editLanguage
+            in  ( { model | editLanguage = { lang | impression = s } }, Cmd.none )
+        SaveLanguage ->
+            ( Debug.log "on save!!" model, Cmd.none )
 
 -- SUBSCRIPTIONS
 
@@ -192,6 +231,40 @@ view model =
                         , model = model
                         , inner = viewError err
                         }
+        NewLanguageForm ->
+            viewCore
+                { title = "New language"
+                , model = model
+                , inner = [
+                    h1 [] [ text "New language" ]
+                    , Html.form [ class "jabarapedia-form"] [
+                        h3 [] [ text "Basic information" ]
+                      , input [ type_ "text", placeholder "Language name"
+                              , value model.editLanguage.name
+                              , onInput LanguageNameChange
+                              ] []
+                      , input [ type_ "text", placeholder "id"
+                              , value model.editLanguage.path
+                              , onInput LanguagePathChange
+                              ] []
+
+                      , h3 [] [ text "Meta" ]
+                      , metaCheck "Light weight" (Just model.editLanguage.meta.lightWeight)
+                      , metaCheck "Static typing" (Just model.editLanguage.meta.staticTyping)
+                      , metaCheck "Functional" model.editLanguage.meta.functional
+                      , metaCheck "Object oriented" model.editLanguage.meta.objectOriented
+
+                      , h3 [] [ text "Impression" ]
+                      , textarea [ placeholder "Impression by Markdown."
+                                 , value model.editLanguage.impression
+                                 , onInput LanguageImpressionChange
+                                 ] []
+                      , hr [] []
+                      , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
+                    ]
+                ]
+                }
+
 
 
 type alias ViewParam msg =
@@ -244,7 +317,7 @@ hd =
 viewError : Http.Error -> List (Html msg)
 viewError err =
     [ h3 [] [ text "Oops... error occurred..." ]
-    , p [] [ text <| errorText err ]
+    , p [] [ text <| Util.errorText err ]
     ]
 
 
@@ -267,11 +340,12 @@ viewLanguageDetail : Language -> List (Html msg)
 viewLanguageDetail lang =
     [ h1 [] [ text lang.name, button [] [ View.fas "edit" ] ]
     , h2 [] [ text "Meta" ]
-    , div [] [ metaCheck "Light weight" (Just lang.meta.lightWeight)
-             , metaCheck "Static typing" (Just lang.meta.staticTyping)
-             , metaCheck "Functional" lang.meta.functional
-             , metaCheck "Object oriented" lang.meta.objectOriented
-             ]
+    , div []
+        [ metaCheck "Light weight" (Just lang.meta.lightWeight)
+        , metaCheck "Static typing" (Just lang.meta.staticTyping)
+        , metaCheck "Functional" lang.meta.functional
+        , metaCheck "Object oriented" lang.meta.objectOriented
+        ]
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]
     ]
@@ -302,26 +376,3 @@ languageLink lang =
 list : Html msg -> Html msg
 list inner =
     li [] [ inner ]
-
-
-
--- UTILITY
-
-
-errorText : Http.Error -> String
-errorText err =
-    case err of
-        Http.BadUrl url ->
-            "Fail -> Bad URL ->" ++ url
-
-        Http.Timeout ->
-            "Fail -> Timeout."
-
-        Http.NetworkError ->
-            "Fail -> Network error."
-
-        Http.BadStatus s ->
-            "Fail -> Bad status -> " ++ String.fromInt s
-
-        Http.BadBody b ->
-            "Fail -> BadBody -> " ++ b
