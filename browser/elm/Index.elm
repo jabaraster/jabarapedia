@@ -41,6 +41,7 @@ type Resource
     = Home
     | Language LanguageId
     | NewLanguageForm
+    | EditLanguageForm LanguageId
     | NotFound
 
 
@@ -51,6 +52,7 @@ parseUrl url =
             (Url.Parser.oneOf
                 [ Url.Parser.map Home <| Url.Parser.top
                 , Url.Parser.map NewLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.s "new")
+                , Url.Parser.map EditLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.string)
                 , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
                 ]
             )
@@ -72,7 +74,7 @@ type alias Model =
     , languages : Maybe (Result Http.Error (List Language))
     , language : Maybe (Result Http.Error Language)
 
-    , editLanguage : Language
+    , editLanguage : Maybe Language
     }
 
 
@@ -87,7 +89,7 @@ init _ url key =
         , key = key
         , languages = Nothing
         , language = Nothing
-        , editLanguage = 
+        , editLanguage = Just
           { name = ""
           , path = ""
           , impression = ""
@@ -119,11 +121,14 @@ route url model urlPush =
                 Home ->
                     ( newModel, Api.getLanguages IndexLoaded )
 
-                NewLanguageForm ->
-                    ( newModel, Api.getLanguages IndexLoaded )
-
                 Language path ->
                     ( { newModel | language = Nothing }, Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ] )
+
+                NewLanguageForm ->
+                    ( newModel, Api.getLanguages IndexLoaded )
+                
+                EditLanguageForm languageId ->
+                    ( newModel, Api.getLanguage languageId LanguageLoadedForEdit )
     in
     if urlPush then
         ( m, Cmd.batch [ pushUrl model.key url, cmd ] )
@@ -141,6 +146,7 @@ type Msg
     | LinkClicked UrlRequest
     | IndexLoaded (Result Http.Error (List Language))
     | LanguageLoaded (Result Http.Error Language)
+    | LanguageLoadedForEdit (Result Http.Error Language)
     | LanguageNameChange String
     | LanguagePathChange String
     | LanguageImpressionChange String
@@ -167,18 +173,25 @@ update msg model =
         LanguageLoaded res ->
             ( { model | language = Just res }, Cmd.none )
 
+        LanguageLoadedForEdit (Ok lang) ->
+            ( { model | editLanguage = Just lang }, Cmd.none )
+        LanguageLoadedForEdit (Err err) ->
+            ( { model | editLanguage = Nothing }, Cmd.none )
 
         LanguageNameChange s ->
-            let lang = model.editLanguage
-            in  ( { model | editLanguage = { lang | name = s } }, Cmd.none )
+            ( operateEditLanguageValue model (\l -> { l | name = s }), Cmd.none )
         LanguagePathChange s ->
-            let lang = model.editLanguage
-            in  ( { model | editLanguage = { lang | path = s } }, Cmd.none )
+            ( operateEditLanguageValue model (\l -> { l | path = s }), Cmd.none )
         LanguageImpressionChange s ->
-            let lang = model.editLanguage
-            in  ( { model | editLanguage = { lang | impression = s } }, Cmd.none )
+            ( operateEditLanguageValue model (\l -> { l | impression = s }), Cmd.none )
         SaveLanguage ->
             ( Debug.log "on save!!" model, Cmd.none )
+
+operateEditLanguageValue : Model -> (Language -> Language) -> Model
+operateEditLanguageValue model operation =
+    case model.editLanguage of
+        Just lang -> { model | editLanguage = Just <| operation lang }
+        Nothing   -> model
 
 -- SUBSCRIPTIONS
 
@@ -240,23 +253,67 @@ view model =
                     , Html.form [ class "jabarapedia-form"] [
                         h3 [] [ text "Basic information" ]
                       , input [ type_ "text", placeholder "Language name"
-                              , value model.editLanguage.name
+                              , value <| getFromEditLanguage model "" (\l -> l.name)
                               , onInput LanguageNameChange
                               ] []
                       , input [ type_ "text", placeholder "id"
-                              , value model.editLanguage.path
+                              , value <| getFromEditLanguage model "" (\l -> l.path)
                               , onInput LanguagePathChange
                               ] []
 
                       , h3 [] [ text "Meta" ]
-                      , metaCheck "Light weight" (Just model.editLanguage.meta.lightWeight)
-                      , metaCheck "Static typing" (Just model.editLanguage.meta.staticTyping)
-                      , metaCheck "Functional" model.editLanguage.meta.functional
-                      , metaCheck "Object oriented" model.editLanguage.meta.objectOriented
+                      , metaCheck "Light weight" (Maybe.map (\lang -> lang.meta.lightWeight) model.editLanguage)
+                      , metaCheck "Static typing" (Maybe.map (\lang -> lang.meta.staticTyping) model.editLanguage)
+                      , metaCheck "Functional" (Maybe.andThen (\lang -> lang.meta.functional) model.editLanguage)
+                      , metaCheck "Object oriented" (Maybe.andThen (\lang -> lang.meta.objectOriented) model.editLanguage)
 
                       , h3 [] [ text "Impression" ]
                       , textarea [ placeholder "Impression by Markdown."
-                                 , value model.editLanguage.impression
+                                 , value <| getFromEditLanguage model "" (\l -> l.impression)
+                                 , onInput LanguageImpressionChange
+                                 ] []
+                      , hr [] []
+                      , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
+                    ]
+                ]
+                }
+        EditLanguageForm languageId ->
+            let el = Maybe.withDefault
+                         { name = ""
+                         , path = ""
+                         , impression = ""
+                         , meta =
+                             { lightWeight = False
+                             , staticTyping = True
+                             , functional = Just True
+                             , objectOriented = Just False
+                             }
+                         } model.editLanguage
+            in viewCore
+                { title = el.name
+                , model = model
+                , inner = [
+                    h1 [] [ text "Edit language" ]
+                    , Html.form [ class "jabarapedia-form"] [
+                        h3 [] [ text "Basic information" ]
+                      , input [ type_ "text", placeholder "Language name"
+                              , value el.name 
+                              , onInput LanguageNameChange
+                              ] []
+                      , input [ type_ "text", placeholder "id"
+                              , value el.path
+                              , onInput LanguagePathChange
+                              ] []
+
+                      , h3 [] [ text "Meta" ]
+                      , metaCheck "Light weight" (Just el.meta.lightWeight)
+                      , metaCheck "Static typing" (Just el.meta.staticTyping)
+                      , metaCheck "Functional" el.meta.functional
+                      , metaCheck "Object oriented" el.meta.objectOriented
+
+                      , h3 [] [ text "Impression" ]
+                      , textarea [ placeholder "Impression by Markdown."
+                                 , value <| getFromEditLanguage model "" (\l -> l.impression)
                                  , onInput LanguageImpressionChange
                                  ] []
                       , hr [] []
@@ -265,7 +322,13 @@ view model =
                 ]
                 }
 
-
+getFromEditLanguage : Model -> a -> (Language -> a) -> a
+getFromEditLanguage model default operation =
+    case model.editLanguage of
+        Just lang ->
+            operation lang
+        Nothing ->
+            default
 
 type alias ViewParam msg =
     { title : String
