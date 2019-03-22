@@ -89,17 +89,7 @@ init _ url key =
         , key = key
         , languages = Nothing
         , language = Nothing
-        , editLanguage = Just
-          { name = ""
-          , path = ""
-          , impression = ""
-          , meta =
-            { lightWeight = False
-            , staticTyping = True
-            , functional = Just True
-            , objectOriented = Just False
-            }
-          }
+        , editLanguage = Nothing
         }
         False
 
@@ -125,7 +115,7 @@ route url model urlPush =
                     ( { newModel | language = Nothing }, Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ] )
 
                 NewLanguageForm ->
-                    ( newModel, Api.getLanguages IndexLoaded )
+                    ( { newModel | editLanguage = Just Model.emptyLanguage }, Api.getLanguages IndexLoaded )
                 
                 EditLanguageForm languageId ->
                     ( newModel, Api.getLanguage languageId LanguageLoadedForEdit )
@@ -147,6 +137,7 @@ type Msg
     | IndexLoaded (Result Http.Error (List Language))
     | LanguageLoaded (Result Http.Error Language)
     | LanguageLoadedForEdit (Result Http.Error Language)
+    | GoLanguageEditor
     | LanguageNameChange String
     | LanguagePathChange String
     | LanguageImpressionChange String
@@ -177,7 +168,13 @@ update msg model =
             ( { model | editLanguage = Just lang }, Cmd.none )
         LanguageLoadedForEdit (Err err) ->
             ( { model | editLanguage = Nothing }, Cmd.none )
-
+        GoLanguageEditor ->
+            ( { model | editLanguage = Maybe.andThen (\res ->
+                    case res of
+                        Ok lang -> Just lang
+                        Err _   -> Nothing
+                ) model.language
+              }, Cmd.none )
         LanguageNameChange s ->
             ( operateEditLanguageValue model (\l -> { l | name = s }), Cmd.none )
         LanguagePathChange s ->
@@ -245,82 +242,23 @@ view model =
                         , inner = viewError err
                         }
         NewLanguageForm ->
-            viewCore
-                { title = "New language"
-                , model = model
-                , inner = [
-                    h1 [] [ text "New language" ]
-                    , Html.form [ class "jabarapedia-form"] [
-                        h3 [] [ text "Basic information" ]
-                      , input [ type_ "text", placeholder "Language name"
-                              , value <| getFromEditLanguage model "" (\l -> l.name)
-                              , onInput LanguageNameChange
-                              ] []
-                      , input [ type_ "text", placeholder "id"
-                              , value <| getFromEditLanguage model "" (\l -> l.path)
-                              , onInput LanguagePathChange
-                              ] []
-
-                      , h3 [] [ text "Meta" ]
-                      , metaCheck "Light weight" (Maybe.map (\lang -> lang.meta.lightWeight) model.editLanguage)
-                      , metaCheck "Static typing" (Maybe.map (\lang -> lang.meta.staticTyping) model.editLanguage)
-                      , metaCheck "Functional" (Maybe.andThen (\lang -> lang.meta.functional) model.editLanguage)
-                      , metaCheck "Object oriented" (Maybe.andThen (\lang -> lang.meta.objectOriented) model.editLanguage)
-
-                      , h3 [] [ text "Impression" ]
-                      , textarea [ placeholder "Impression by Markdown."
-                                 , value <| getFromEditLanguage model "" (\l -> l.impression)
-                                 , onInput LanguageImpressionChange
-                                 ] []
-                      , hr [] []
-                      , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
-                    ]
-                ]
-                }
+            case model.editLanguage of
+                Just l -> languageForm model l
+                Nothing ->
+                    viewCore
+                        { title = "Not Found"
+                        , model = model
+                        , inner = [ h3 [] [ text "Not Found." ]]
+                        }
         EditLanguageForm languageId ->
-            let el = Maybe.withDefault
-                         { name = ""
-                         , path = ""
-                         , impression = ""
-                         , meta =
-                             { lightWeight = False
-                             , staticTyping = True
-                             , functional = Just True
-                             , objectOriented = Just False
-                             }
-                         } model.editLanguage
-            in viewCore
-                { title = el.name
-                , model = model
-                , inner = [
-                    h1 [] [ text "Edit language" ]
-                    , Html.form [ class "jabarapedia-form"] [
-                        h3 [] [ text "Basic information" ]
-                      , input [ type_ "text", placeholder "Language name"
-                              , value el.name 
-                              , onInput LanguageNameChange
-                              ] []
-                      , input [ type_ "text", placeholder "id"
-                              , value el.path
-                              , onInput LanguagePathChange
-                              ] []
-
-                      , h3 [] [ text "Meta" ]
-                      , metaCheck "Light weight" (Just el.meta.lightWeight)
-                      , metaCheck "Static typing" (Just el.meta.staticTyping)
-                      , metaCheck "Functional" el.meta.functional
-                      , metaCheck "Object oriented" el.meta.objectOriented
-
-                      , h3 [] [ text "Impression" ]
-                      , textarea [ placeholder "Impression by Markdown."
-                                 , value <| getFromEditLanguage model "" (\l -> l.impression)
-                                 , onInput LanguageImpressionChange
-                                 ] []
-                      , hr [] []
-                      , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
-                    ]
-                ]
-                }
+            case model.editLanguage of
+                Just l -> languageForm model l
+                Nothing ->
+                    viewCore
+                        { title = "Not Found"
+                        , model = model
+                        , inner = [ h3 [] [ text "Not Found." ]]
+                        }
 
 getFromEditLanguage : Model -> a -> (Language -> a) -> a
 getFromEditLanguage model default operation =
@@ -346,6 +284,42 @@ viewCore param =
         , mainContent param.inner
         ]
     }
+
+languageForm : Model -> Language -> Document Msg
+languageForm model lang =
+    viewCore
+      { title = lang.name
+      , model = model
+      , inner = [
+          h1 [] [ text "Edit language" ]
+          , Html.form [ class "jabarapedia-form"] [
+              h3 [] [ text "Basic information" ]
+            , input [ type_ "text", placeholder "Language name"
+                    , value lang.name 
+                    , onInput LanguageNameChange
+                    ] []
+            , input [ type_ "text", placeholder "id"
+                    , value lang.path
+                    , onInput LanguagePathChange
+                    ] []
+
+            , h3 [] [ text "Meta" ]
+            , metaCheck "Light weight"    (Just lang.meta.lightWeight)
+            , metaCheck "Static typing"   (Just lang.meta.staticTyping)
+            , metaCheck "Functional"      (Just lang.meta.functional)
+            , metaCheck "Object oriented" (Just lang.meta.objectOriented)
+
+            , h3 [] [ text "Impression" ]
+            , textarea [ placeholder "Impression by Markdown."
+                       , value lang.impression
+                       , onInput LanguageImpressionChange
+                       ] []
+            , hr [] []
+            , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
+          ]
+      ]
+      }
+
 
 
 index : Maybe (Result Http.Error (List Language)) -> Html msg
@@ -399,15 +373,15 @@ viewLanguageIndex languages =
     [ ul [] <| List.map (list << languageLink) languages ]
 
 
-viewLanguageDetail : Language -> List (Html msg)
+viewLanguageDetail : Language -> List (Html Msg)
 viewLanguageDetail lang =
-    [ h1 [] [ text lang.name, button [] [ View.fas "edit" ] ]
+    [ h1 [] [ text lang.name, button [ onClick GoLanguageEditor ] [ View.fas "edit" ] ]
     , h2 [] [ text "Meta" ]
     , div []
         [ metaCheck "Light weight" (Just lang.meta.lightWeight)
         , metaCheck "Static typing" (Just lang.meta.staticTyping)
-        , metaCheck "Functional" lang.meta.functional
-        , metaCheck "Object oriented" lang.meta.objectOriented
+        , metaCheck "Functional" (Just lang.meta.functional)
+        , metaCheck "Object oriented" (Just lang.meta.objectOriented)
         ]
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]

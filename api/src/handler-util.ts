@@ -1,7 +1,5 @@
 import { APIGatewayProxyHandler, APIGatewayProxyResult } from 'aws-lambda'
 
-export type HttpReturnCode = number
-
 export const HttpReturnCode = {
   OK: 200,
   CREATED: 201,

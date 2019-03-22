@@ -6,6 +6,8 @@ type Failable<S, F> = {
 interface LanguageMeta {
   lightWeight: boolean;
   staticTyping: boolean;
+  functional: boolean;
+  objectOriented: boolean;
 }
 
 interface Language{
