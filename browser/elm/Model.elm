@@ -13,6 +13,11 @@ type alias LanguageMeta =
     , functional: Bool
     , objectOriented: Bool
     }
+type LanguageMetaKind
+    = LightWeight
+    | StaticTyping
+    | Functional
+    | ObjectOriented
 
 
 type alias Language =

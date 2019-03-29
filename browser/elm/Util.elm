@@ -1,6 +1,7 @@
-module Util exposing (errorText)
+module Util exposing (errorText, isJust, isNothing)
 
 import Http
+
 
 errorText : Http.Error -> String
 errorText err =
@@ -19,3 +20,18 @@ errorText err =
 
         Http.BadBody b ->
             "Fail -> BadBody -> " ++ b
+
+
+isJust : Maybe a -> Bool
+isJust m =
+    case m of
+        Nothing ->
+            False
+
+        Just _ ->
+            True
+
+
+isNothing : Maybe a -> Bool
+isNothing =
+    not << isJust

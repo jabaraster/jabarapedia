@@ -4,17 +4,17 @@ import Api
 import Browser exposing (Document, UrlRequest)
 import Browser.Navigation exposing (Key)
 import Html exposing (..)
-import Html.Events exposing (..)
 import Html.Attributes exposing (..)
+import Html.Events exposing (..)
 import Http
 import Json.Decode
 import List exposing (map)
-import Model exposing (Language, LanguageId)
+import Model exposing (Language, LanguageId, LanguageMetaKind(..))
 import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing (..)
-import View
 import Util
+import View
 
 
 
@@ -73,7 +73,6 @@ type alias Model =
     , key : Key
     , languages : Maybe (Result Http.Error (List Language))
     , language : Maybe (Result Http.Error Language)
-
     , editLanguage : Maybe Language
     }
 
@@ -116,7 +115,7 @@ route url model urlPush =
 
                 NewLanguageForm ->
                     ( { newModel | editLanguage = Just Model.emptyLanguage }, Api.getLanguages IndexLoaded )
-                
+
                 EditLanguageForm languageId ->
                     ( newModel, Api.getLanguage languageId LanguageLoadedForEdit )
     in
@@ -141,6 +140,7 @@ type Msg
     | LanguageNameChange String
     | LanguagePathChange String
     | LanguageImpressionChange String
+    | LanguageMetaChange LanguageMetaKind
     | SaveLanguage
 
 
@@ -166,29 +166,76 @@ update msg model =
 
         LanguageLoadedForEdit (Ok lang) ->
             ( { model | editLanguage = Just lang }, Cmd.none )
+
         LanguageLoadedForEdit (Err err) ->
             ( { model | editLanguage = Nothing }, Cmd.none )
+
         GoLanguageEditor ->
-            ( { model | editLanguage = Maybe.andThen (\res ->
-                    case res of
-                        Ok lang -> Just lang
-                        Err _   -> Nothing
-                ) model.language
-              }, Cmd.none )
+            ( { model
+                | editLanguage =
+                    Maybe.andThen
+                        (\res ->
+                            case res of
+                                Ok lang ->
+                                    Just lang
+
+                                Err _ ->
+                                    Nothing
+                        )
+                        model.language
+              }
+            , Cmd.none
+            )
+
         LanguageNameChange s ->
             ( operateEditLanguageValue model (\l -> { l | name = s }), Cmd.none )
+
         LanguagePathChange s ->
             ( operateEditLanguageValue model (\l -> { l | path = s }), Cmd.none )
+
         LanguageImpressionChange s ->
             ( operateEditLanguageValue model (\l -> { l | impression = s }), Cmd.none )
+
+        LanguageMetaChange kind ->
+            ( switchEditLanguageMeta model kind, Cmd.none )
+
         SaveLanguage ->
             ( Debug.log "on save!!" model, Cmd.none )
+
 
 operateEditLanguageValue : Model -> (Language -> Language) -> Model
 operateEditLanguageValue model operation =
     case model.editLanguage of
-        Just lang -> { model | editLanguage = Just <| operation lang }
-        Nothing   -> model
+        Nothing ->
+            model
+
+        Just lang ->
+            { model | editLanguage = Just <| operation lang }
+
+
+switchEditLanguageMeta : Model -> LanguageMetaKind -> Model
+switchEditLanguageMeta model kind =
+    Maybe.andThen
+        (\lang ->
+            let meta = lang.meta
+                newMeta =  case kind of
+                    LightWeight ->
+                        { meta | lightWeight = not meta.lightWeight }
+
+                    StaticTyping ->
+                        { meta | staticTyping = not meta.staticTyping }
+
+                    Functional ->
+                        { meta | functional = not meta.functional }
+
+                    ObjectOriented ->
+                        { meta | objectOriented = not meta.objectOriented }
+            in Just { model | editLanguage = Just { lang | meta = newMeta }}
+        )
+        model.editLanguage
+        |> Maybe.withDefault model
+
+
 
 -- SUBSCRIPTIONS
 
@@ -241,32 +288,41 @@ view model =
                         , model = model
                         , inner = viewError err
                         }
+
         NewLanguageForm ->
             case model.editLanguage of
-                Just l -> languageForm model l
+                Just l ->
+                    languageForm model l
+
                 Nothing ->
                     viewCore
                         { title = "Not Found"
                         , model = model
-                        , inner = [ h3 [] [ text "Not Found." ]]
+                        , inner = [ h3 [] [ text "Not Found." ] ]
                         }
+
         EditLanguageForm languageId ->
             case model.editLanguage of
-                Just l -> languageForm model l
+                Just l ->
+                    languageForm model l
+
                 Nothing ->
                     viewCore
                         { title = "Not Found"
                         , model = model
-                        , inner = [ h3 [] [ text "Not Found." ]]
+                        , inner = [ h3 [] [ text "Not Found." ] ]
                         }
+
 
 getFromEditLanguage : Model -> a -> (Language -> a) -> a
 getFromEditLanguage model default operation =
     case model.editLanguage of
         Just lang ->
             operation lang
+
         Nothing ->
             default
+
 
 type alias ViewParam msg =
     { title : String
@@ -285,41 +341,47 @@ viewCore param =
         ]
     }
 
+
 languageForm : Model -> Language -> Document Msg
 languageForm model lang =
     viewCore
-      { title = lang.name
-      , model = model
-      , inner = [
-          h1 [] [ text "Edit language" ]
-          , Html.form [ class "jabarapedia-form"] [
-              h3 [] [ text "Basic information" ]
-            , input [ type_ "text", placeholder "Language name"
-                    , value lang.name 
+        { title = lang.name
+        , model = model
+        , inner =
+            [ h1 [] [ text "Edit language" ]
+            , Html.form [ class "jabarapedia-form" ]
+                [ h3 [] [ text "Basic information" ]
+                , label [] [ text "Language name" ]
+                , input
+                    [ type_ "text"
+                    , value lang.name
                     , onInput LanguageNameChange
-                    ] []
-            , input [ type_ "text", placeholder "id"
+                    ]
+                    []
+                , label [] [ text "id (part of url)" ]
+                , input
+                    [ type_ "text"
                     , value lang.path
                     , onInput LanguagePathChange
-                    ] []
-
-            , h3 [] [ text "Meta" ]
-            , metaCheck "Light weight"    (Just lang.meta.lightWeight)
-            , metaCheck "Static typing"   (Just lang.meta.staticTyping)
-            , metaCheck "Functional"      (Just lang.meta.functional)
-            , metaCheck "Object oriented" (Just lang.meta.objectOriented)
-
-            , h3 [] [ text "Impression" ]
-            , textarea [ placeholder "Impression by Markdown."
-                       , value lang.impression
-                       , onInput LanguageImpressionChange
-                       ] []
-            , hr [] []
-            , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
-          ]
-      ]
-      }
-
+                    ]
+                    []
+                , h3 [] [ text "Meta" ]
+                , metaCheck LightWeight    (Just <| LanguageMetaChange LightWeight)    lang
+                , metaCheck StaticTyping   (Just <| LanguageMetaChange StaticTyping)   lang
+                , metaCheck Functional     (Just <| LanguageMetaChange Functional)     lang
+                , metaCheck ObjectOriented (Just <| LanguageMetaChange ObjectOriented) lang
+                , h3 [] [ text "Impression" ]
+                , textarea
+                    [ placeholder "Impression by Markdown."
+                    , value lang.impression
+                    , onInput LanguageImpressionChange
+                    ]
+                    []
+                , hr [] []
+                , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
+                ]
+            ]
+        }
 
 
 index : Maybe (Result Http.Error (List Language)) -> Html msg
@@ -378,31 +440,31 @@ viewLanguageDetail lang =
     [ h1 [] [ text lang.name, button [ onClick GoLanguageEditor ] [ View.fas "edit" ] ]
     , h2 [] [ text "Meta" ]
     , div []
-        [ metaCheck "Light weight" (Just lang.meta.lightWeight)
-        , metaCheck "Static typing" (Just lang.meta.staticTyping)
-        , metaCheck "Functional" (Just lang.meta.functional)
-        , metaCheck "Object oriented" (Just lang.meta.objectOriented)
+        [ metaCheck LightWeight    Nothing lang
+        , metaCheck StaticTyping   Nothing lang
+        , metaCheck Functional     Nothing lang
+        , metaCheck ObjectOriented Nothing lang
         ]
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]
     ]
 
-
-metaCheck : String -> Maybe Bool -> Html msg
-metaCheck label b =
-    let
-        ( bs, fas ) =
-            case b of
-                Nothing ->
-                    ( "nothing", "question-circle" )
-
-                Just True ->
-                    ( "true", "check-circle" )
-
-                Just False ->
-                    ( "false", "times-circle" )
+metaCheck : LanguageMetaKind -> Maybe msg -> Language -> Html msg
+metaCheck kind action lang =
+    let (label, value) = case kind of
+            LightWeight    -> ("Light weight"   , lang.meta.lightWeight)
+            StaticTyping   -> ("Static typing"  , lang.meta.staticTyping)
+            Functional     -> ("Functional"     , lang.meta.functional)
+            ObjectOriented -> ("Object oriented", lang.meta.objectOriented)
     in
-    span [ class "meta-check" ] [ View.fas_ bs fas, span [] [ text label ] ]
+    span
+        ( metaCheckClass action :: (Maybe.withDefault [] <| Maybe.andThen (\a -> Just [ onClick a ]) action) )
+        [ View.fas_ (if value then "true" else "false") (if value then "check-circle" else "times-circle") , span [] [ text label ] ]
+
+
+metaCheckClass : Maybe msg -> Attribute msg
+metaCheckClass action =
+    classList [ ("meta-check", True), ("clickable", Util.isJust action) ]
 
 
 languageLink : Language -> Html msg
