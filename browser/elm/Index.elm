@@ -350,6 +350,7 @@ languageForm model lang =
         , inner =
             [ h1 [] [ text "Edit language" ]
             , Html.form [ class "jabarapedia-form" ]
+                (
                 [ h3 [] [ text "Basic information" ]
                 , label [] [ text "Language name" ]
                 , input
@@ -365,21 +366,20 @@ languageForm model lang =
                     , onInput LanguagePathChange
                     ]
                     []
-                , h3 [] [ text "Meta" ]
-                , metaCheck LightWeight    (Just <| LanguageMetaChange LightWeight)    lang
-                , metaCheck StaticTyping   (Just <| LanguageMetaChange StaticTyping)   lang
-                , metaCheck Functional     (Just <| LanguageMetaChange Functional)     lang
-                , metaCheck ObjectOriented (Just <| LanguageMetaChange ObjectOriented) lang
-                , h3 [] [ text "Impression" ]
+                , h3 [] [ text "Meta" ] 
+                ]
+                ++ (metaChecks (Just LanguageMetaChange) lang) ++
+                [ h3 [] [ text "Impression" ]
                 , textarea
                     [ placeholder "Impression by Markdown."
                     , value lang.impression
                     , onInput LanguageImpressionChange
                     ]
                     []
-                , hr [] []
+                , View.hr_
                 , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
                 ]
+                )
             ]
         }
 
@@ -439,28 +439,30 @@ viewLanguageDetail : Language -> List (Html Msg)
 viewLanguageDetail lang =
     [ h1 [] [ text lang.name, button [ onClick GoLanguageEditor ] [ View.fas "edit" ] ]
     , h2 [] [ text "Meta" ]
-    , div []
-        [ metaCheck LightWeight    Nothing lang
-        , metaCheck StaticTyping   Nothing lang
-        , metaCheck Functional     Nothing lang
-        , metaCheck ObjectOriented Nothing lang
-        ]
+    , div [] <| metaChecks Nothing lang
     , h2 [] [ text "Impression" ]
     , p [] [ text lang.impression ]
     ]
 
-metaCheck : LanguageMetaKind -> Maybe msg -> Language -> Html msg
-metaCheck kind action lang =
-    let (label, value) = case kind of
-            LightWeight    -> ("Light weight"   , lang.meta.lightWeight)
-            StaticTyping   -> ("Static typing"  , lang.meta.staticTyping)
-            Functional     -> ("Functional"     , lang.meta.functional)
-            ObjectOriented -> ("Object oriented", lang.meta.objectOriented)
-    in
-    span
-        ( metaCheckClass action :: (Maybe.withDefault [] <| Maybe.andThen (\a -> Just [ onClick a ]) action) )
-        [ View.fas_ (if value then "true" else "false") (if value then "check-circle" else "times-circle") , span [] [ text label ] ]
 
+metaChecks : Maybe (LanguageMetaKind -> msg) -> Language -> List (Html msg)
+metaChecks mKindAction lang =
+    List.map
+        (\kind ->
+            let (label, value) = case kind of
+                    LightWeight    -> ("Light weight"   , lang.meta.lightWeight)
+                    StaticTyping   -> ("Static typing"  , lang.meta.staticTyping)
+                    Functional     -> ("Functional"     , lang.meta.functional)
+                    ObjectOriented -> ("Object oriented", lang.meta.objectOriented)
+                mAction = Maybe.andThen (\kindAction -> Just <| kindAction kind) mKindAction
+            in
+            span
+                ( metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.andThen (\action -> Just [ onClick action ]) mAction) )
+                [ View.fas_ (if value then "true" else "false") (if value then "check-circle" else "times-circle")
+                , span [] [ text label ]
+                ]
+        )
+        Model.kinds
 
 metaCheckClass : Maybe msg -> Attribute msg
 metaCheckClass action =
