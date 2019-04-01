@@ -20,38 +20,48 @@ provider:
     - "arn:aws:s3:::tegaki-image/*"
 
 functions:
-  getLanguages:
-    handler: handler.getLanguages
-    events:
-    - http:
-        method: get
-        path: language/index
-        cors: false
-  postLanguage:
-    handler: handler.postLanguage
-    events:
-    - http:
-        method: post
-        path: language/index
-        cors: false
+  # Resource: Language index
   optionsLanguages:
     handler: handler.options
     events:
     - http:
         method: options
         path: language/index
-        cors: false
+        cors: true
+  getLanguages:
+    handler: handler.getLanguages
+    events:
+    - http:
+        method: get
+        path: language/index
+        cors: true
+  postLanguage:
+    handler: handler.postLanguage
+    events:
+    - http:
+        method: post
+        path: language/index
+        cors: true
+
+  # Resource: Language
+  optionsLanguage:
+    handler: handler.options
+    events:
+    - http:
+        method: options
+        path: language/{languageId}
+        cors: true
   getLanguage:
     handler: handler.getLanguage
     events:
     - http:
         method: get
         path: language/{languageId}
-        cors: false
-  optionsLanguage:
-    handler: handler.getLanguage
+        cors: true
+  putLanguage:
+    handler: handler.putLanguage
     events:
     - http:
-        method: options
+        method: put
         path: language/{languageId}
-        cors: false
+        cors: true

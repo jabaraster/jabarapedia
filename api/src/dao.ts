@@ -16,24 +16,52 @@ const db: AWS.DynamoDB.DocumentClient = new AWS.DynamoDB.DocumentClient()
 
 const TABLE_NAME: string = "jabarapedia_dev"
 
-export async function postLanguage(data: Language): Promise<Failable<Empty, string>> {
+export async function createLanguage(lang: Language): Promise<Failable<Empty, string>> {
   // 存在チェック
   const res = await db.get({
     TableName: TABLE_NAME,
     Key: {
       kind: 'Language',
-      id: data.path,
+      id: lang.path,
     }
   }).promise()
   if (res.Item != null) return fail('key duplicate.')
 
-  const d = JSON.parse(JSON.stringify(data))
+  const d = JSON.parse(JSON.stringify(lang))
   d.kind = 'Language'
-  d.id = data.path
+  d.id = lang.path
   delete d.path
   await db.put({
     TableName: TABLE_NAME,
     Item: d,
+  }).promise()
+  return success(empty)
+}
+
+export async function updateLanguage(lang: Language): Promise<Failable<Empty, string>> {
+  // 存在チェック
+  const res = await db.get({
+    TableName: TABLE_NAME,
+    Key: {
+      kind: 'Language',
+      id: lang.path,
+    }
+  }).promise()
+  if (res.Item == null) return fail("Not Found")
+
+  await db.update({
+    TableName: TABLE_NAME,
+    Key: {
+      kind: 'Language',
+      id: lang.path,
+    },
+    UpdateExpression: 'set #Item = :Item',
+    ExpressionAttributeNames: {
+      '#Item': 'Item'
+    },
+    ExpressionAttributeValues: {
+      ':Item': lang
+    },
   }).promise()
   return success(empty)
 }

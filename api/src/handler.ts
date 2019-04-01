@@ -18,7 +18,7 @@ export const getLanguages: APIGatewayProxyHandler = async () => {
 
 export const postLanguage: APIGatewayProxyHandler = async (evt) => {
   const body: Language = JSON.parse(evt.body as string)
-  const res = await dao.postLanguage(body)
+  const res = await dao.createLanguage(body)
   if (res.fail != null) return r.general(HttpReturnCode.BAD_REQUEST, {errorMessage: res.fail})
   return r.created(null)
 }
@@ -29,4 +29,13 @@ export const getLanguage: APIGatewayProxyHandler = async (evt) => {
   const res = await dao.getLanguage(li)
   if (res.fail != null) return r.general(HttpReturnCode.NOT_FOUND, { errorMessage: `language ${li} not found.` })
   return r.ok(res.success)
+}
+
+export const putLanguage: APIGatewayProxyHandler = async (evt) => {
+  const li = evt.pathParameters!!.languageId
+  if (li == null) return r.general(HttpReturnCode.NOT_FOUND)
+  const body: Language = JSON.parse(evt.body as string)
+  body.path = li
+  await dao.updateLanguage(body)
+  return r.noContent()
 }

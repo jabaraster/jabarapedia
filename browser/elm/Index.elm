@@ -71,6 +71,8 @@ pushUrl key url =
 type alias Model =
     { resource : Resource
     , key : Key
+    , communicating : Bool
+    , communicationError : Maybe Http.Error
     , languages : Maybe (Result Http.Error (List Language))
     , language : Maybe (Result Http.Error Language)
     , editLanguage : Maybe Language
@@ -86,6 +88,8 @@ init _ url key =
     route url
         { resource = Home
         , key = key
+        , communicating = False
+        , communicationError = Nothing
         , languages = Nothing
         , language = Nothing
         , editLanguage = Nothing
@@ -108,16 +112,26 @@ route url model urlPush =
                     ( newModel, Cmd.none )
 
                 Home ->
-                    ( newModel, Api.getLanguages IndexLoaded )
+                    ( { newModel | communicating = True }, Api.getLanguages IndexLoaded )
 
                 Language path ->
-                    ( { newModel | language = Nothing }, Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ] )
+                    ( { newModel
+                        | language = Nothing
+                        , communicating = True
+                      }
+                    , Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ]
+                    )
 
                 NewLanguageForm ->
-                    ( { newModel | editLanguage = Just Model.emptyLanguage }, Api.getLanguages IndexLoaded )
+                    ( { newModel
+                        | editLanguage = Just Model.emptyLanguage
+                        , communicating = True
+                      }
+                    , Api.getLanguages IndexLoaded
+                    )
 
                 EditLanguageForm languageId ->
-                    ( newModel, Api.getLanguage languageId LanguageLoadedForEdit )
+                    ( { newModel | communicating = True }, Api.getLanguage languageId LanguageLoadedForEdit )
     in
     if urlPush then
         ( m, Cmd.batch [ pushUrl model.key url, cmd ] )
@@ -131,7 +145,8 @@ route url model urlPush =
 
 
 type Msg
-    = UrlChange Url
+    = None
+    | UrlChange Url
     | LinkClicked UrlRequest
     | IndexLoaded (Result Http.Error (List Language))
     | LanguageLoaded (Result Http.Error Language)
@@ -141,12 +156,17 @@ type Msg
     | LanguagePathChange String
     | LanguageImpressionChange String
     | LanguageMetaChange LanguageMetaKind
-    | SaveLanguage
+    | CreateLanguage
+    | UpdateLanguage
+    | SuccessSaveLanguage (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        None ->
+            ( model, Cmd.none )
+
         UrlChange url ->
             route url model False
 
@@ -159,16 +179,37 @@ update msg model =
                     ( model, Browser.Navigation.load href )
 
         IndexLoaded res ->
-            ( { model | languages = Just res }, Cmd.none )
+            ( { model
+                | languages = Just res
+                , communicating = False
+              }
+            , Cmd.none
+            )
 
         LanguageLoaded res ->
-            ( { model | language = Just res }, Cmd.none )
+            ( { model
+                | language = Just res
+                , communicating = False
+              }
+            , Cmd.none
+            )
 
         LanguageLoadedForEdit (Ok lang) ->
-            ( { model | editLanguage = Just lang }, Cmd.none )
+            ( { model
+                | editLanguage = Just lang
+                , communicating = False
+              }
+            , Cmd.none
+            )
 
         LanguageLoadedForEdit (Err err) ->
-            ( { model | editLanguage = Nothing }, Cmd.none )
+            ( { model
+                | editLanguage = Nothing
+                , communicating = False
+                , communicationError = Just err
+              }
+            , Cmd.none
+            )
 
         GoLanguageEditor ->
             ( { model
@@ -199,38 +240,84 @@ update msg model =
         LanguageMetaChange kind ->
             ( switchEditLanguageMeta model kind, Cmd.none )
 
-        SaveLanguage ->
-            ( Debug.log "on save!!" model, Cmd.none )
+        CreateLanguage ->
+            case model.editLanguage of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just lang ->
+                    ( { model | communicating = True }, Api.createLanguage lang SuccessSaveLanguage )
+
+        UpdateLanguage ->
+            case model.editLanguage of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just lang ->
+                    ( { model | communicating = True }, Api.updateLanguage lang SuccessSaveLanguage )
+
+        SuccessSaveLanguage (Ok ()) ->
+            let
+                mUrl =
+                    Maybe.andThen (\lang -> Just <| Url.Builder.relative [ "language", lang.path ] []) model.editLanguage
+                        |> Maybe.andThen Url.fromString
+            in
+            case mUrl of
+                Nothing ->
+                    ( { model
+                        | communicating = False
+                        , communicationError = Nothing
+                        , editLanguage = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+                Just url ->
+                    route url
+                        { model
+                            | communicating = False
+                            , communicationError = Nothing
+                            , editLanguage = Nothing
+                        }
+                        True
+
+        SuccessSaveLanguage (Err err) ->
+            ( { model
+                | communicating = False
+                , communicationError = Just err
+              }
+            , Cmd.none
+            )
 
 
 operateEditLanguageValue : Model -> (Language -> Language) -> Model
 operateEditLanguageValue model operation =
-    case model.editLanguage of
-        Nothing ->
-            model
-
-        Just lang ->
-            { model | editLanguage = Just <| operation lang }
+    Maybe.withDefault model <| Maybe.andThen (\lang -> Just { model | editLanguage = Just <| operation lang }) model.editLanguage
 
 
 switchEditLanguageMeta : Model -> LanguageMetaKind -> Model
 switchEditLanguageMeta model kind =
     Maybe.andThen
         (\lang ->
-            let meta = lang.meta
-                newMeta =  case kind of
-                    LightWeight ->
-                        { meta | lightWeight = not meta.lightWeight }
+            let
+                meta =
+                    lang.meta
 
-                    StaticTyping ->
-                        { meta | staticTyping = not meta.staticTyping }
+                newMeta =
+                    case kind of
+                        LightWeight ->
+                            { meta | lightWeight = not meta.lightWeight }
 
-                    Functional ->
-                        { meta | functional = not meta.functional }
+                        StaticTyping ->
+                            { meta | staticTyping = not meta.staticTyping }
 
-                    ObjectOriented ->
-                        { meta | objectOriented = not meta.objectOriented }
-            in Just { model | editLanguage = Just { lang | meta = newMeta }}
+                        Functional ->
+                            { meta | functional = not meta.functional }
+
+                        ObjectOriented ->
+                            { meta | objectOriented = not meta.objectOriented }
+            in
+            Just { model | editLanguage = Just { lang | meta = newMeta } }
         )
         model.editLanguage
         |> Maybe.withDefault model
@@ -332,13 +419,12 @@ type alias ViewParam msg =
 
 
 viewCore : ViewParam msg -> Document msg
-viewCore param =
-    { title = param.title ++ " | Jabarapedia"
-    , body =
-        [ hd
-        , index param.model.languages
-        , mainContent param.inner
-        ]
+viewCore { title, model, inner } =
+    { title = title ++ " | Jabarapedia"
+    , body =  [ hd model
+              , index model.languages
+              , mainContent inner
+              ]
     }
 
 
@@ -350,38 +436,50 @@ languageForm model lang =
         , inner =
             [ h1 [] [ text "Edit language" ]
             , Html.form [ class "jabarapedia-form" ]
-                (
-                [ h3 [] [ text "Basic information" ]
-                , label [] [ text "Language name" ]
-                , input
+                ([ h3 [] [ text "Basic information" ]
+                 , label [] [ text "Language name" ]
+                 , input
                     [ type_ "text"
                     , value lang.name
                     , onInput LanguageNameChange
                     ]
                     []
-                , label [] [ text "id (part of url)" ]
-                , input
+                 , label [] [ text "id (part of url)" ]
+                 , input
                     [ type_ "text"
                     , value lang.path
                     , onInput LanguagePathChange
                     ]
                     []
-                , h3 [] [ text "Meta" ] 
-                ]
-                ++ (metaChecks (Just LanguageMetaChange) lang) ++
-                [ h3 [] [ text "Impression" ]
-                , textarea
-                    [ placeholder "Impression by Markdown."
-                    , value lang.impression
-                    , onInput LanguageImpressionChange
-                    ]
-                    []
-                , View.hr_
-                , button [ onClick SaveLanguage, type_ "button", class "primary" ] [ text "Save" ]
-                ]
+                 , h3 [] [ text "Meta" ]
+                 ]
+                    ++ metaChecks (Just LanguageMetaChange) lang
+                    ++ [ h3 [] [ text "Impression" ]
+                       , textarea
+                            [ placeholder "Impression by Markdown."
+                            , value lang.impression
+                            , onInput LanguageImpressionChange
+                            ]
+                            []
+                       , View.hr_
+                       , button [ onSaveClick model, type_ "button", class "primary" ] [ text "Save" ]
+                       ]
                 )
             ]
         }
+
+
+onSaveClick : Model -> Attribute Msg
+onSaveClick model =
+    case model.resource of
+        NewLanguageForm ->
+            onClick CreateLanguage
+
+        EditLanguageForm _ ->
+            onClick UpdateLanguage
+
+        _ ->
+            onClick None
 
 
 index : Maybe (Result Http.Error (List Language)) -> Html msg
@@ -405,11 +503,12 @@ mainContent =
     section [ class "main-content" ]
 
 
-hd : Html msg
-hd =
+hd : Model -> Html msg
+hd model =
     header []
         [ a [ href "/" ] [ img [ src "/img/logo.jpg", class "logo" ] [] ]
         , span [] [ text "Jabarapedia" ]
+        , View.fas_ (if model.communicating then "loading-icon loading" else "loading-icon hide") "redo"
         ]
 
 
@@ -449,24 +548,48 @@ metaChecks : Maybe (LanguageMetaKind -> msg) -> Language -> List (Html msg)
 metaChecks mKindAction lang =
     List.map
         (\kind ->
-            let (label, value) = case kind of
-                    LightWeight    -> ("Light weight"   , lang.meta.lightWeight)
-                    StaticTyping   -> ("Static typing"  , lang.meta.staticTyping)
-                    Functional     -> ("Functional"     , lang.meta.functional)
-                    ObjectOriented -> ("Object oriented", lang.meta.objectOriented)
-                mAction = Maybe.andThen (\kindAction -> Just <| kindAction kind) mKindAction
+            let
+                ( label, value ) =
+                    case kind of
+                        LightWeight ->
+                            ( "Light weight", lang.meta.lightWeight )
+
+                        StaticTyping ->
+                            ( "Static typing", lang.meta.staticTyping )
+
+                        Functional ->
+                            ( "Functional", lang.meta.functional )
+
+                        ObjectOriented ->
+                            ( "Object oriented", lang.meta.objectOriented )
+
+                mAction =
+                    Maybe.andThen (\kindAction -> Just <| kindAction kind) mKindAction
             in
             span
-                ( metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.andThen (\action -> Just [ onClick action ]) mAction) )
-                [ View.fas_ (if value then "true" else "false") (if value then "check-circle" else "times-circle")
+                (metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.andThen (\action -> Just [ onClick action ]) mAction))
+                [ View.fas_
+                    (if value then
+                        "true"
+
+                     else
+                        "false"
+                    )
+                    (if value then
+                        "check-circle"
+
+                     else
+                        "times-circle"
+                    )
                 , span [] [ text label ]
                 ]
         )
         Model.kinds
 
+
 metaCheckClass : Maybe msg -> Attribute msg
 metaCheckClass action =
-    classList [ ("meta-check", True), ("clickable", Util.isJust action) ]
+    classList [ ( "meta-check", True ), ( "clickable", Util.isJust action ) ]
 
 
 languageLink : Language -> Html msg

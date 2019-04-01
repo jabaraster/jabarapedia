@@ -1,4 +1,4 @@
-module Model exposing (Language, LanguageId, LanguageMeta, LanguageMetaKind(..), emptyLanguage, kinds, languageDecoder, languageMetaDecoder)
+module Model exposing (..)
 
 import Json.Decode as JD
 import Json.Encode as JE

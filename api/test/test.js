@@ -1,12 +1,14 @@
 const sut = require('../.webpack/dao')
 
-sut.postLanguage({
+sut.saveLanguage({
     meta: {
         lightWeight: false,
         staticTyping: true,
+        functional: true,
+        objectOriented: false,
     },
     name: 'Haskell',
-    path: 'haskell',
+    path: 'haskell2',
     impression: 'max!!',
 })
     .then(res => {

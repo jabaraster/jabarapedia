@@ -27,3 +27,27 @@ getLanguage languageId operation =
     , tracker = Nothing
     , expect = Http.expectJson operation <| Model.languageDecoder
     }
+
+createLanguage : Language -> (Result Http.Error () -> msg) -> Cmd msg
+createLanguage lang operation =
+  Http.riskyRequest
+    { url = "https://api.jabarapedia.jabara.info/language/index"
+    , method = "POST"
+    , body = Http.jsonBody <| Model.languageEncoder lang
+    , headers = []
+    , timeout = Nothing
+    , tracker = Nothing
+    , expect = Http.expectWhatever operation
+    }
+
+updateLanguage : Language -> (Result Http.Error () -> msg) -> Cmd msg
+updateLanguage lang operation =
+  Http.riskyRequest
+    { url = "https://api.jabarapedia.jabara.info/language/" ++ lang.path
+    , method = "PUT"
+    , body = Http.jsonBody <| Model.languageEncoder lang
+    , headers = []
+    , timeout = Nothing
+    , tracker = Nothing
+    , expect = Http.expectWhatever operation
+    }

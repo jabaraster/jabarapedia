@@ -29,6 +29,7 @@ export function newResultDecorator(allowOrigin: string): ResultDecorator {
     result.headers['Access-Control-Allow-Origin'] = allowOrigin
     result.headers['Access-Control-Allow-Credentials'] = true
     result.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    result.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,HEAD'
     return result
   }
   const general = (statusCode, body, headers) => core({
