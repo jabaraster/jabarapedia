@@ -49,20 +49,28 @@ export async function updateLanguage(lang: Language): Promise<Failable<Empty, st
   }).promise()
   if (res.Item == null) return fail("Not Found")
 
-  await db.update({
+  console.log(lang)
+
+  const updateRes = await db.update({
     TableName: TABLE_NAME,
     Key: {
       kind: 'Language',
       id: lang.path,
     },
-    UpdateExpression: 'set #Item = :Item',
+    UpdateExpression: 'set impression = :impression, #name = :name, meta = :meta',
     ExpressionAttributeNames: {
-      '#Item': 'Item'
+      '#name': 'name',
     },
     ExpressionAttributeValues: {
-      ':Item': lang
+      ':name': lang.name,
+      ':impression': lang.impression,
+      ':meta': lang.meta,
     },
+    ReturnValues: 'UPDATED_NEW'
   }).promise()
+
+  console.log(updateRes)
+
   return success(empty)
 }
 

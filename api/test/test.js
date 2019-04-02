@@ -1,15 +1,15 @@
 const sut = require('../.webpack/dao')
 
-sut.saveLanguage({
+sut.updateLanguage({
     meta: {
         lightWeight: false,
         staticTyping: true,
-        functional: true,
-        objectOriented: false,
+        functional: false,
+        objectOriented: true,
     },
-    name: 'Haskell',
-    path: 'haskell2',
-    impression: 'max!!',
+    name: 'Java',
+    path: 'java',
+    impression: 'So old...',
 })
     .then(res => {
         console.log(res)

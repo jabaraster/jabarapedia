@@ -36,6 +36,8 @@ export const putLanguage: APIGatewayProxyHandler = async (evt) => {
   if (li == null) return r.general(HttpReturnCode.NOT_FOUND)
   const body: Language = JSON.parse(evt.body as string)
   body.path = li
-  await dao.updateLanguage(body)
+  const res = await dao.updateLanguage(body)
+  console.log(res)
+  if (res.fail != null) return r.general(HttpReturnCode.BAD_REQUEST, { errorMessage: res.fail })
   return r.noContent()
 }
