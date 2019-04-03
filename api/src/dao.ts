@@ -49,9 +49,7 @@ export async function updateLanguage(lang: Language): Promise<Failable<Empty, st
   }).promise()
   if (res.Item == null) return fail("Not Found")
 
-  console.log(lang)
-
-  const updateRes = await db.update({
+  await db.update({
     TableName: TABLE_NAME,
     Key: {
       kind: 'Language',
@@ -68,8 +66,6 @@ export async function updateLanguage(lang: Language): Promise<Failable<Empty, st
     },
     ReturnValues: 'UPDATED_NEW'
   }).promise()
-
-  console.log(updateRes)
 
   return success(empty)
 }

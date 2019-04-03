@@ -1,4 +1,4 @@
-module Index exposing (Model, Msg(..), Resource(..), init, main, parseUrl, subscriptions, update, view)
+module Index exposing (..)
 
 import Api
 import Browser exposing (Document, UrlRequest)
@@ -7,6 +7,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
+import IndexTypes exposing (Model, Msg(..), Resource(..))
 import Json.Decode
 import List exposing (map)
 import Model exposing (Language, LanguageId, LanguageMetaKind(..))
@@ -37,14 +38,6 @@ main =
 -- ROUTING
 
 
-type Resource
-    = Home
-    | Language LanguageId
-    | NewLanguageForm
-    | EditLanguageForm LanguageId
-    | NotFound
-
-
 parseUrl : Url -> Resource
 parseUrl url =
     Maybe.withDefault NotFound <|
@@ -53,7 +46,7 @@ parseUrl url =
                 [ Url.Parser.map Home <| Url.Parser.top
                 , Url.Parser.map NewLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.s "new")
                 , Url.Parser.map EditLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.string)
-                , Url.Parser.map Language (Url.Parser.s "language" </> Url.Parser.string)
+                , Url.Parser.map IndexTypes.Language (Url.Parser.s "language" </> Url.Parser.string)
                 ]
             )
             url
@@ -62,39 +55,6 @@ parseUrl url =
 pushUrl : Key -> Url -> Cmd msg
 pushUrl key url =
     Browser.Navigation.pushUrl key <| Url.toString url
-
-
-
--- MODEL
-
-
-type alias Model =
-    { resource : Resource
-    , key : Key
-    , communicating : Bool
-    , communicationError : Maybe Http.Error
-    , languages : Maybe (Result Http.Error (List Language))
-    , language : Maybe (Result Http.Error Language)
-    , editLanguage : Maybe Language
-    }
-
-
-init : flags -> Url -> Key -> ( Model, Cmd Msg )
-init _ url key =
-    let
-        res =
-            parseUrl url
-    in
-    route url
-        { resource = Home
-        , key = key
-        , communicating = False
-        , communicationError = Nothing
-        , languages = Nothing
-        , language = Nothing
-        , editLanguage = Nothing
-        }
-        False
 
 
 route : Url -> Model -> Bool -> ( Model, Cmd Msg )
@@ -112,14 +72,17 @@ route url model urlPush =
                     ( newModel, Cmd.none )
 
                 Home ->
-                    ( { newModel | communicating = True }, Api.getLanguages IndexLoaded )
+                    ( { newModel | communicating = Util.isNothing <| Util.resultToMaybe model.languages }
+                    , Cmd.batch <| loadLanguagesIfNothing model.languages
+                    )
 
-                Language path ->
+                IndexTypes.Language path ->
                     ( { newModel
                         | language = Nothing
                         , communicating = True
                       }
-                    , Cmd.batch [ Api.getLanguages IndexLoaded, Api.getLanguage path LanguageLoaded ]
+                    , Cmd.batch <| Api.getLanguage path LanguageLoaded ::
+                                   loadLanguagesIfNothing model.languages
                     )
 
                 NewLanguageForm ->
@@ -131,7 +94,10 @@ route url model urlPush =
                     )
 
                 EditLanguageForm languageId ->
-                    ( { newModel | communicating = True }, Api.getLanguage languageId LanguageLoadedForEdit )
+                    ( { newModel | communicating = True }
+                    , Cmd.batch <| Api.getLanguage languageId LanguageLoadedForEdit ::
+                                   loadLanguagesIfNothing model.languages
+                    )
     in
     if urlPush then
         ( m, Cmd.batch [ pushUrl model.key url, cmd ] )
@@ -140,25 +106,30 @@ route url model urlPush =
         ( m, cmd )
 
 
+loadLanguagesIfNothing : Maybe (Result Http.Error (List Language)) -> List (Cmd Msg)
+loadLanguagesIfNothing m =
+    Maybe.withDefault [Api.getLanguages IndexLoaded] <| Maybe.map (always []) <| Util.resultToMaybe m
+
+
+-- INIT
+
+
+init : flags -> Url -> Key -> ( Model, Cmd Msg )
+init _ url key =
+    route url
+        { resource = Home
+        , key = key
+        , communicating = False
+        , communicationError = Nothing
+        , languages = Nothing
+        , language = Nothing
+        , editLanguage = Nothing
+        }
+        False
+
+
 
 -- UPDATE
-
-
-type Msg
-    = None
-    | UrlChange Url
-    | LinkClicked UrlRequest
-    | IndexLoaded (Result Http.Error (List Language))
-    | LanguageLoaded (Result Http.Error Language)
-    | LanguageLoadedForEdit (Result Http.Error Language)
-    | GoLanguageEditor
-    | LanguageNameChange String
-    | LanguagePathChange String
-    | LanguageImpressionChange String
-    | LanguageMetaChange LanguageMetaKind
-    | CreateLanguage
-    | UpdateLanguage
-    | SuccessSaveLanguage (Result Http.Error ())
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -171,7 +142,7 @@ update msg model =
             route url model False
 
         LinkClicked urlRequest ->
-            case urlRequest of
+            case Debug.log "" urlRequest of
                 Browser.Internal url ->
                     route url model True
 
@@ -259,7 +230,7 @@ update msg model =
         SuccessSaveLanguage (Ok ()) ->
             let
                 mUrl =
-                    Maybe.andThen (\lang -> Just <| Url.Builder.relative [ "language", lang.path ] []) model.editLanguage
+                    Maybe.map (\lang -> Url.Builder.relative [ "language", lang.path ] []) model.editLanguage
                         |> Maybe.andThen Url.fromString
             in
             case mUrl of
@@ -292,12 +263,12 @@ update msg model =
 
 operateEditLanguageValue : Model -> (Language -> Language) -> Model
 operateEditLanguageValue model operation =
-    Maybe.withDefault model <| Maybe.andThen (\lang -> Just { model | editLanguage = Just <| operation lang }) model.editLanguage
+    Maybe.withDefault model <| Maybe.map (\lang -> { model | editLanguage = Just <| operation lang }) model.editLanguage
 
 
 switchEditLanguageMeta : Model -> LanguageMetaKind -> Model
 switchEditLanguageMeta model kind =
-    Maybe.andThen
+    Maybe.map
         (\lang ->
             let
                 meta =
@@ -317,7 +288,7 @@ switchEditLanguageMeta model kind =
                         ObjectOriented ->
                             { meta | objectOriented = not meta.objectOriented }
             in
-            Just { model | editLanguage = Just { lang | meta = newMeta } }
+            { model | editLanguage = Just { lang | meta = newMeta } }
         )
         model.editLanguage
         |> Maybe.withDefault model
@@ -353,7 +324,7 @@ view model =
                 , inner = [ p [] [ text "Jabarapediaはプログラミングが大好きな私 じゃばら が、プログラミング言語について語るサイトです." ] ]
                 }
 
-        Language path ->
+        IndexTypes.Language path ->
             case model.language of
                 Nothing ->
                     viewCore
@@ -421,10 +392,11 @@ type alias ViewParam msg =
 viewCore : ViewParam msg -> Document msg
 viewCore { title, model, inner } =
     { title = title ++ " | Jabarapedia"
-    , body =  [ hd model
-              , index model.languages
-              , mainContent inner
-              ]
+    , body =
+        [ hd model
+        , index model.languages
+        , mainContent inner
+        ]
     }
 
 
@@ -508,7 +480,14 @@ hd model =
     header []
         [ a [ href "/" ] [ img [ src "/img/logo.jpg", class "logo" ] [] ]
         , span [] [ text "Jabarapedia" ]
-        , View.fas_ (if model.communicating then "loading-icon loading" else "loading-icon hide") "redo"
+        , View.fas_
+            (if model.communicating then
+                "loading-icon loading"
+
+             else
+                "loading-icon hide"
+            )
+            "redo"
         ]
 
 
@@ -564,10 +543,10 @@ metaChecks mKindAction lang =
                             ( "Object oriented", lang.meta.objectOriented )
 
                 mAction =
-                    Maybe.andThen (\kindAction -> Just <| kindAction kind) mKindAction
+                    Maybe.map (\kindAction -> kindAction kind) mKindAction
             in
             span
-                (metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.andThen (\action -> Just [ onClick action ]) mAction))
+                (metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.map (\action -> [ onClick action ]) mAction))
                 [ View.fas_
                     (if value then
                         "true"

@@ -1,4 +1,4 @@
-module Util exposing (errorText, isJust, isNothing)
+module Util exposing (errorText, isError, isJust, isNothing, isOk, resultToMaybe)
 
 import Http
 
@@ -35,3 +35,31 @@ isJust m =
 isNothing : Maybe a -> Bool
 isNothing =
     not << isJust
+
+
+isOk : Result e a -> Bool
+isOk r =
+    case r of
+        Ok _ ->
+            True
+
+        Err _ ->
+            False
+
+
+isError : Result e a -> Bool
+isError =
+    not << isOk
+
+
+resultToMaybe : Maybe (Result err a) -> Maybe a
+resultToMaybe =
+    Maybe.andThen
+        (\res ->
+            case res of
+                Ok a ->
+                    Just a
+
+                Err _ ->
+                    Nothing
+        )
