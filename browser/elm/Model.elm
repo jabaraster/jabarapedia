@@ -2,6 +2,10 @@ module Model exposing (..)
 
 import Json.Decode as JD
 import Json.Encode as JE
+import Http
+
+
+type alias RemoteResource a = Maybe (Result Http.Error a)
 
 
 type alias LanguageId =

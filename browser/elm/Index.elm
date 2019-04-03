@@ -1,4 +1,4 @@
-module Index exposing (..)
+module Index exposing (ViewParam, getFromEditLanguage, hd, index, init, languageForm, languageLink, list, loadLanguagesIfNothing, main, mainContent, metaCheckClass, metaChecks, onSaveClick, operateEditLanguageValue, parseUrl, pushUrl, route, subscriptions, switchEditLanguageMeta, update, view, viewCore, viewError, viewLanguageDetail, viewLanguageIndex, viewLanguageIndexRoute)
 
 import Api
 import Browser exposing (Document, UrlRequest)
@@ -7,7 +7,7 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
-import IndexTypes exposing (Model, Msg(..), Resource(..))
+import IndexTypes exposing (Model, Msg(..), Page(..))
 import Json.Decode
 import List exposing (map)
 import Model exposing (Language, LanguageId, LanguageMetaKind(..))
@@ -38,15 +38,15 @@ main =
 -- ROUTING
 
 
-parseUrl : Url -> Resource
+parseUrl : Url -> Page
 parseUrl url =
-    Maybe.withDefault NotFound <|
+    Maybe.withDefault NotFoundPage <|
         Url.Parser.parse
             (Url.Parser.oneOf
-                [ Url.Parser.map Home <| Url.Parser.top
-                , Url.Parser.map NewLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.s "new")
-                , Url.Parser.map EditLanguageForm (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.string)
-                , Url.Parser.map IndexTypes.Language (Url.Parser.s "language" </> Url.Parser.string)
+                [ Url.Parser.map HomePage <| Url.Parser.top
+                , Url.Parser.map NewLanguagePage (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.s "new")
+                , Url.Parser.map EditLanguagePage (Url.Parser.s "form" </> Url.Parser.s "language" </> Url.Parser.string)
+                , Url.Parser.map LanguagePage (Url.Parser.s "language" </> Url.Parser.string)
                 ]
             )
             url
@@ -57,58 +57,54 @@ pushUrl key url =
     Browser.Navigation.pushUrl key <| Url.toString url
 
 
-route : Url -> Model -> Bool -> ( Model, Cmd Msg )
-route url model urlPush =
+route : Url -> Model -> ( Model, Cmd Msg )
+route url model =
     let
-        res =
+        page =
             parseUrl url
 
         newModel =
-            { model | resource = res }
-
-        ( m, cmd ) =
-            case res of
-                NotFound ->
-                    ( newModel, Cmd.none )
-
-                Home ->
-                    ( { newModel | communicating = Util.isNothing <| Util.resultToMaybe model.languages }
-                    , Cmd.batch <| loadLanguagesIfNothing model.languages
-                    )
-
-                IndexTypes.Language path ->
-                    ( { newModel
-                        | language = Nothing
-                        , communicating = True
-                      }
-                    , Cmd.batch <| Api.getLanguage path LanguageLoaded ::
-                                   loadLanguagesIfNothing model.languages
-                    )
-
-                NewLanguageForm ->
-                    ( { newModel
-                        | editLanguage = Just Model.emptyLanguage
-                        , communicating = True
-                      }
-                    , Api.getLanguages IndexLoaded
-                    )
-
-                EditLanguageForm languageId ->
-                    ( { newModel | communicating = True }
-                    , Cmd.batch <| Api.getLanguage languageId LanguageLoadedForEdit ::
-                                   loadLanguagesIfNothing model.languages
-                    )
+            { model | page = page }
     in
-    if urlPush then
-        ( m, Cmd.batch [ pushUrl model.key url, cmd ] )
+    case page of
+        NotFoundPage ->
+            ( newModel, Cmd.none )
 
-    else
-        ( m, cmd )
+        HomePage ->
+            ( { newModel | communicating = Util.isNothing <| Util.resultToMaybe model.languages }
+            , Cmd.batch <| loadLanguagesIfNothing model.languages
+            )
+
+        LanguagePage path ->
+            ( { newModel
+                | language = Nothing
+                , communicating = True
+              }
+            , Cmd.batch <|
+                Api.getLanguage path LanguageLoaded
+                    :: loadLanguagesIfNothing model.languages
+            )
+
+        NewLanguagePage ->
+            ( { newModel
+                | editLanguage = Just Model.emptyLanguage
+                , communicating = True
+              }
+            , Api.getLanguages IndexLoaded
+            )
+
+        EditLanguagePage languageId ->
+            ( { newModel | communicating = True }
+            , Cmd.batch <|
+                Api.getLanguage languageId LanguageLoadedForEdit
+                    :: loadLanguagesIfNothing model.languages
+            )
 
 
 loadLanguagesIfNothing : Maybe (Result Http.Error (List Language)) -> List (Cmd Msg)
 loadLanguagesIfNothing m =
-    Maybe.withDefault [Api.getLanguages IndexLoaded] <| Maybe.map (always []) <| Util.resultToMaybe m
+    Maybe.withDefault [ Api.getLanguages IndexLoaded ] <| Maybe.map (always []) <| Util.resultToMaybe m
+
 
 
 -- INIT
@@ -117,7 +113,7 @@ loadLanguagesIfNothing m =
 init : flags -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
     route url
-        { resource = Home
+        { page = HomePage
         , key = key
         , communicating = False
         , communicationError = Nothing
@@ -125,7 +121,6 @@ init _ url key =
         , language = Nothing
         , editLanguage = Nothing
         }
-        False
 
 
 
@@ -139,12 +134,13 @@ update msg model =
             ( model, Cmd.none )
 
         UrlChange url ->
-            route url model False
+            route url model
 
         LinkClicked urlRequest ->
-            case Debug.log "" urlRequest of
+            case urlRequest of
                 Browser.Internal url ->
-                    route url model True
+                    -- ここでrouteを呼んではいけない. 呼ぶとUrlChangeが呼ばれてしまい2回サーバ通信が発生する
+                    ( model, Browser.Navigation.pushUrl model.key <| Url.toString url )
 
                 Browser.External href ->
                     ( model, Browser.Navigation.load href )
@@ -244,13 +240,13 @@ update msg model =
                     )
 
                 Just url ->
-                    route url
-                        { model
-                            | communicating = False
-                            , communicationError = Nothing
-                            , editLanguage = Nothing
-                        }
-                        True
+                    ( { model
+                        | communicating = False
+                        , communicationError = Nothing
+                        , editLanguage = Nothing
+                      }
+                    , Browser.Navigation.pushUrl model.key "/"
+                    )
 
         SuccessSaveLanguage (Err err) ->
             ( { model
@@ -309,22 +305,22 @@ subscriptions _ =
 
 view : Model -> Document Msg
 view model =
-    case model.resource of
-        NotFound ->
+    case model.page of
+        NotFoundPage ->
             viewCore
                 { title = "not found"
                 , model = model
                 , inner = [ span [] [ text "Sorry, request page not found." ] ]
                 }
 
-        Home ->
+        HomePage ->
             viewCore
                 { title = "Home"
                 , model = model
                 , inner = [ p [] [ text "Jabarapediaはプログラミングが大好きな私 じゃばら が、プログラミング言語について語るサイトです." ] ]
                 }
 
-        IndexTypes.Language path ->
+        LanguagePage path ->
             case model.language of
                 Nothing ->
                     viewCore
@@ -347,7 +343,7 @@ view model =
                         , inner = viewError err
                         }
 
-        NewLanguageForm ->
+        NewLanguagePage ->
             case model.editLanguage of
                 Just l ->
                     languageForm model l
@@ -359,7 +355,7 @@ view model =
                         , inner = [ h3 [] [ text "Not Found." ] ]
                         }
 
-        EditLanguageForm languageId ->
+        EditLanguagePage languageId ->
             case model.editLanguage of
                 Just l ->
                     languageForm model l
@@ -443,11 +439,11 @@ languageForm model lang =
 
 onSaveClick : Model -> Attribute Msg
 onSaveClick model =
-    case model.resource of
-        NewLanguageForm ->
+    case model.page of
+        NewLanguagePage ->
             onClick CreateLanguage
 
-        EditLanguageForm _ ->
+        EditLanguagePage _ ->
             onClick UpdateLanguage
 
         _ ->

@@ -1,27 +1,27 @@
-module IndexTypes exposing (Model, Msg(..), Resource(..))
+module IndexTypes exposing (Model, Msg(..), Page(..))
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation exposing (Key)
 import Http
-import Model exposing (Language, LanguageId, LanguageMetaKind)
+import Model exposing (Language, LanguageId, LanguageMetaKind, RemoteResource)
 import Url exposing (Url)
 
 
-type Resource
-    = Home
-    | Language LanguageId
-    | NewLanguageForm
-    | EditLanguageForm LanguageId
-    | NotFound
+type Page
+    = HomePage
+    | LanguagePage LanguageId
+    | NewLanguagePage
+    | EditLanguagePage LanguageId
+    | NotFoundPage
 
 
 type alias Model =
-    { resource : Resource
+    { page : Page
     , key : Key
     , communicating : Bool
     , communicationError : Maybe Http.Error
-    , languages : Maybe (Result Http.Error (List Language))
-    , language : Maybe (Result Http.Error Language)
+    , languages : RemoteResource (List Language)
+    , language : RemoteResource Language
     , editLanguage : Maybe Language
     }
 
