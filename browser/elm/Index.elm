@@ -226,10 +226,9 @@ update msg model =
         SuccessSaveLanguage (Ok ()) ->
             let
                 mUrl =
-                    Maybe.map (\lang -> Url.Builder.relative [ "language", lang.path ] []) model.editLanguage
-                        |> Maybe.andThen Url.fromString
+                    Maybe.map (\lang -> Url.Builder.absolute [ "language", lang.path ] []) model.editLanguage
             in
-            case mUrl of
+            case Debug.log "" <| mUrl of
                 Nothing ->
                     ( { model
                         | communicating = False
@@ -245,7 +244,7 @@ update msg model =
                         , communicationError = Nothing
                         , editLanguage = Nothing
                       }
-                    , Browser.Navigation.pushUrl model.key "/"
+                    , Browser.Navigation.pushUrl model.key url
                     )
 
         SuccessSaveLanguage (Err err) ->
