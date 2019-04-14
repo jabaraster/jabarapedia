@@ -71,7 +71,7 @@ route url model =
             ( newModel, Cmd.none )
 
         HomePage ->
-            ( { newModel | communicating = Util.isNothing <| Util.resultToMaybe model.languages }
+            ( { newModel | communicating = Util.isNothing <| Maybe.andThen Result.toMaybe model.languages }
             , Cmd.batch <| loadLanguagesIfNothing model.languages
             )
 
@@ -103,7 +103,7 @@ route url model =
 
 loadLanguagesIfNothing : Maybe (Result Http.Error (List Language)) -> List (Cmd Msg)
 loadLanguagesIfNothing m =
-    Maybe.withDefault [ Api.getLanguages IndexLoaded ] <| Maybe.map (always []) <| Util.resultToMaybe m
+    Maybe.withDefault [ Api.getLanguages IndexLoaded ] <| Maybe.map (always []) <| Maybe.andThen Result.toMaybe m
 
 
 
@@ -228,7 +228,7 @@ update msg model =
                 mUrl =
                     Maybe.map (\lang -> Url.Builder.absolute [ "language", lang.path ] []) model.editLanguage
             in
-            case Debug.log "" <| mUrl of
+            case mUrl of
                 Nothing ->
                     ( { model
                         | communicating = False
@@ -266,22 +266,12 @@ switchEditLanguageMeta model kind =
     Maybe.map
         (\lang ->
             let
-                meta =
-                    lang.meta
-
                 newMeta =
-                    case kind of
-                        LightWeight ->
-                            { meta | lightWeight = not meta.lightWeight }
-
-                        StaticTyping ->
-                            { meta | staticTyping = not meta.staticTyping }
-
-                        Functional ->
-                            { meta | functional = not meta.functional }
-
-                        ObjectOriented ->
-                            { meta | objectOriented = not meta.objectOriented }
+                    let
+                        accessor =
+                            Model.metaAccessor kind
+                    in
+                    accessor.setter (not <| accessor.getter lang.meta) lang.meta
             in
             { model | editLanguage = Just { lang | meta = newMeta } }
         )
@@ -521,21 +511,10 @@ viewLanguageDetail lang =
 metaChecks : Maybe (LanguageMetaKind -> msg) -> Language -> List (Html msg)
 metaChecks mKindAction lang =
     List.map
-        (\kind ->
+        (\( kind, accessor ) ->
             let
-                ( label, value ) =
-                    case kind of
-                        LightWeight ->
-                            ( "Light weight", lang.meta.lightWeight )
-
-                        StaticTyping ->
-                            ( "Static typing", lang.meta.staticTyping )
-
-                        Functional ->
-                            ( "Functional", lang.meta.functional )
-
-                        ObjectOriented ->
-                            ( "Object oriented", lang.meta.objectOriented )
+                value =
+                    accessor.getter lang.meta
 
                 mAction =
                     Maybe.map (\kindAction -> kindAction kind) mKindAction
@@ -555,7 +534,7 @@ metaChecks mKindAction lang =
                      else
                         "times-circle"
                     )
-                , span [] [ text label ]
+                , span [] [ text accessor.label ]
                 ]
         )
         Model.kinds
