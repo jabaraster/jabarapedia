@@ -1,4 +1,4 @@
-module Index exposing (ViewParam, getFromEditLanguage, hd, index, init, languageForm, languageLink, list, loadLanguagesIfNothing, main, mainContent, metaCheckClass, metaChecks, onSaveClick, operateEditLanguageValue, parseUrl, pushUrl, route, subscriptions, switchEditLanguageMeta, update, view, viewCore, viewError, viewLanguageDetail, viewLanguageIndex, viewLanguageIndexRoute)
+module Index exposing (ViewParam, getFromEditLanguage, hd, index, init, languageForm, languageLink, list, loadLanguagesIfNothing, main, mainContent, metaChecks, onSaveClick, operateEditLanguageValue, parseUrl, pushUrl, route, subscriptions, switchEditLanguageMeta, update, view, viewCore, viewError, viewLanguageDetail, viewLanguageIndex, viewLanguageIndexRoute)
 
 import Api
 import Browser exposing (Document, UrlRequest)
@@ -8,6 +8,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
 import IndexTypes exposing (Model, Msg(..), Page(..))
+import Jabara.Views as V
 import Json.Decode
 import List exposing (map)
 import Model exposing (Language, LanguageId, LanguageMetaKind(..))
@@ -465,7 +466,7 @@ hd model =
     header []
         [ a [ href "/" ] [ img [ src "/img/logo.jpg", class "logo" ] [] ]
         , span [] [ text "Jabarapedia" ]
-        , View.fas_
+        , V.fas
             (if model.communicating then
                 "loading-icon loading"
 
@@ -500,7 +501,7 @@ viewLanguageIndex languages =
 
 viewLanguageDetail : Language -> List (Html Msg)
 viewLanguageDetail lang =
-    [ h1 [] [ text lang.name, button [ onClick GoLanguageEditor ] [ View.fas "edit" ] ]
+    [ h1 [] [ text lang.name, button [ onClick GoLanguageEditor ] [ V.fas_ "edit" ] ]
     , h2 [] [ text "Meta" ]
     , div [] <| metaChecks Nothing lang
     , h2 [] [ text "Impression" ]
@@ -519,30 +520,9 @@ metaChecks mKindAction lang =
                 mAction =
                     Maybe.map (\kindAction -> kindAction kind) mKindAction
             in
-            span
-                (metaCheckClass mAction :: (Maybe.withDefault [] <| Maybe.map (\action -> [ onClick action ]) mAction))
-                [ View.fas_
-                    (if value then
-                        "true"
-
-                     else
-                        "false"
-                    )
-                    (if value then
-                        "check-circle"
-
-                     else
-                        "times-circle"
-                    )
-                , span [] [ text accessor.label ]
-                ]
+            V.fasCheck value accessor.label mAction
         )
         Model.kinds
-
-
-metaCheckClass : Maybe msg -> Attribute msg
-metaCheckClass action =
-    classList [ ( "meta-check", True ), ( "clickable", Util.isJust action ) ]
 
 
 languageLink : Language -> Html msg

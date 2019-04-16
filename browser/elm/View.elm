@@ -1,4 +1,4 @@
-module View exposing (..)
+module View exposing (FalseClass, Max, Min, NewValue, Prefix, TrueClass, conditionClass, conditionClass_, hr_, span_, span__, stars, toggleArrow, viewInput)
 
 import Html exposing (..)
 import Html.Attributes exposing (..)
@@ -83,16 +83,6 @@ type alias Max =
 
 type alias NewValue =
     Int
-
-
-fas : String -> Html msg
-fas iconName =
-    i [ class <| "fas fa-" ++ iconName ] []
-
-
-fas_ : String -> String -> Html msg
-fas_ clsName iconName =
-    i [ class <| clsName ++ " fas fa-" ++ iconName ] []
 
 
 stars : Min -> Max -> Int -> (NewValue -> msg) -> Html msg
