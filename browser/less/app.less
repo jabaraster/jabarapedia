@@ -38,9 +38,6 @@
 }
 
 
-
-
-
 /* Palette color codes */
 /* Palette URL: http://paletton.com/#uid=14b0u0k8WexebXo9-rVbU3Yjn00 */
 
@@ -126,9 +123,13 @@ a:visited {
   text-decoration: none;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .index {
-  float: left;
-  width: 20%;
+  width: 10rem;
+  position: absolute;
   padding-left: 1rem;
   padding-top: 0.5rem;
   padding-bottom: 0.5rem;
@@ -139,11 +140,10 @@ a:visited {
   }
 }
 .main-content {
-  float: left;
-  width: 74%;
   border-left: solid 1px @rgba-primary-2;
+  margin-left: 12rem;
   padding-left: 0.5rem;
-  margin-right: 0.5rem;
+  padding-right: 0.5rem;
 
   > h1 {
     font-size: 1.8rem; 

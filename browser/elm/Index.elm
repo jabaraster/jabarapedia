@@ -12,6 +12,7 @@ import Jabara.Views as V
 import Json.Decode
 import List exposing (map)
 import Model exposing (Language, LanguageId, LanguageMetaKind(..))
+import Ports
 import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing (..)
@@ -113,15 +114,16 @@ loadLanguagesIfNothing m =
 
 init : flags -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    route url
-        { page = HomePage
-        , key = key
-        , communicating = False
-        , communicationError = Nothing
-        , languages = Nothing
-        , language = Nothing
-        , editLanguage = Nothing
-        }
+    let (m, c) = route url
+                   { page = HomePage
+                   , key = key
+                   , communicating = False
+                   , communicationError = Nothing
+                   , languages = Nothing
+                   , language = Nothing
+                   , editLanguage = Nothing
+                   }
+    in (m, Cmd.batch [ Ports.initMde (), c ])
 
 
 
@@ -382,6 +384,10 @@ viewCore { title, model, inner } =
         [ hd model
         , index model.languages
         , mainContent inner
+        , div [ classList [ ("jabarapedia-markdown-editor-container", True)
+                          , ("hidden", Util.isNothing model.editLanguage)
+              ]]
+              [ textarea [id "jabarapedia-markdown-editor" ] [] ]
         ]
     }
 
